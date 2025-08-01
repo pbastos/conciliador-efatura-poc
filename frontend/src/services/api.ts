@@ -96,5 +96,43 @@ export const apiService = {
         match_rate: 0
       };
     }
+  },
+
+  async updateMatchStatus(matchId: string, status: 'proposed' | 'confirmed' | 'rejected'): Promise<void> {
+    const response = await fetch(`${API_URL}/api/v1/matches/${matchId}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ status })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+  },
+
+  async createManualMatch(efaturaId: string, bankId: string): Promise<void> {
+    const response = await fetch(`${API_URL}/api/v1/matches`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ efatura_id: efaturaId, bank_id: bankId })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+  },
+
+  async deleteMatch(matchId: string): Promise<void> {
+    const response = await fetch(`${API_URL}/api/v1/matches/${matchId}`, {
+      method: 'DELETE'
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
   }
 };

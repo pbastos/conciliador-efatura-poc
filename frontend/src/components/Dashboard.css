@@ -288,6 +288,19 @@
   padding: 2rem 0;
 }
 
+.empty-message {
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 3rem 0;
+}
+
+.empty-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 24px;
+  color: #9ca3af;
+}
+
 /* Reconciliation Section */
 .reconciliation-section {
   margin-top: 2rem;
@@ -399,20 +412,37 @@
   background: #f8fafc;
 }
 
-.reconciliation-table tbody tr.matched {
+/* Row status highlighting */
+.reconciliation-table tbody tr.match-row.confirmed {
   background: rgba(16, 185, 129, 0.05);
 }
 
-.reconciliation-table tbody tr.matched:hover {
+.reconciliation-table tbody tr.match-row.confirmed:hover {
   background: rgba(16, 185, 129, 0.1);
 }
 
-.reconciliation-table tbody tr.unmatched {
+.reconciliation-table tbody tr.match-row.proposed {
+  background: rgba(245, 158, 11, 0.05);
+}
+
+.reconciliation-table tbody tr.match-row.proposed:hover {
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.reconciliation-table tbody tr.match-row.rejected {
   background: rgba(239, 68, 68, 0.05);
 }
 
-.reconciliation-table tbody tr.unmatched:hover {
+.reconciliation-table tbody tr.match-row.rejected:hover {
   background: rgba(239, 68, 68, 0.1);
+}
+
+.reconciliation-table tbody tr.match-row.unmatched {
+  background: #ffffff;
+}
+
+.reconciliation-table tbody tr.match-row.unmatched:hover {
+  background: #f9fafb;
 }
 
 .reconciliation-table .amount {

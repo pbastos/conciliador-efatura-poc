@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './Dashboard.css';
 import { apiService, EfaturaRecord, ReconciliationStats } from '../services/api';
+import MatchStatusDropdown, { MatchStatus } from './MatchStatusDropdown';
 
 interface DashboardProps {
   onNavigate: (tab: string) => void;
@@ -52,18 +53,45 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     return new Date(dateString).toLocaleDateString('pt-PT');
   };
 
-  const getStatusBadge = (status: string, confidence?: number) => {
-    switch (status) {
-      case 'matched':
-      case 'confirmed':
-        return <span className="status-badge matched">Reconciliado</span>;
-      case 'proposed':
-        return <span className="status-badge proposed">Proposto ({Math.round((confidence || 0) * 100)}%)</span>;
-      case 'unmatched':
-        return <span className="status-badge unmatched">Não Reconciliado</span>;
-      default:
-        return <span className="status-badge unmatched">Não Reconciliado</span>;
+  const handleStatusChange = async (recordId: string, newStatus: MatchStatus) => {
+    const record = records.find(r => r.efatura_id === recordId);
+    if (!record) return;
+
+    // Update local state optimistically
+    setRecords(prevRecords => 
+      prevRecords.map(r => 
+        r.efatura_id === recordId 
+          ? { ...r, match_status: newStatus as any }
+          : r
+      )
+    );
+
+    try {
+      if (record.match_id) {
+        // Update existing match status
+        await apiService.updateMatchStatus(record.match_id, newStatus as any);
+      } else if (newStatus === 'rejected') {
+        // Nothing to do for unmatched records being rejected
+        return;
+      }
+      
+      // Refresh data to get updated state
+      const updatedRecords = await apiService.getRecordsWithMatches(50, 0);
+      setRecords(updatedRecords);
+    } catch (error) {
+      console.error('Error updating match status:', error);
+      // Revert optimistic update on error
+      const originalRecords = await apiService.getRecordsWithMatches(50, 0);
+      setRecords(originalRecords);
     }
+  };
+
+  const getMatchStatus = (record: EfaturaRecord): MatchStatus => {
+    if (record.match_status === 'confirmed') return 'confirmed';
+    if (record.match_status === 'rejected') return 'rejected';
+    if (record.match_status === 'proposed') return 'proposed';
+    if (record.match_id) return 'proposed';
+    return 'unmatched';
   };
 
   return (
@@ -131,65 +159,22 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
         </div>
       ) : records.length === 0 ? (
         <div className="empty-section">
-          <div className="upload-row">
-            <div className="upload-card">
-              <div className="upload-card-header">
-                <div className="upload-icon blue">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                    <polyline points="14 2 14 8 20 8" />
-                  </svg>
-                </div>
-                <h3>Ficheiro E-fatura</h3>
-              </div>
-              <div className="upload-area" onClick={() => onNavigate('upload')}>
-                <div className="upload-icon-large">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="17 8 12 3 7 8" />
-                    <line x1="12" y1="3" x2="12" y2="15" />
-                  </svg>
-                </div>
-                <p className="upload-text">Arraste o ficheiro E-fatura aqui</p>
-                <p className="upload-formats">XML, XLSX ou CSV</p>
-                <p className="upload-hint">Clique ou arraste para carregar</p>
-              </div>
-            </div>
-
-            <div className="upload-card">
-              <div className="upload-card-header">
-                <div className="upload-icon green">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
-                    <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
-                  </svg>
-                </div>
-                <h3>Movimentos Bancários</h3>
-              </div>
-              <div className="upload-area" onClick={() => onNavigate('upload')}>
-                <div className="upload-icon-large">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="17 8 12 3 7 8" />
-                    <line x1="12" y1="3" x2="12" y2="15" />
-                  </svg>
-                </div>
-                <p className="upload-text">Arraste o ficheiro bancário aqui</p>
-                <p className="upload-formats">XLSX, CSV ou OFX</p>
-                <p className="upload-hint">Clique ou arraste para carregar</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="upload-footer">
-            <h3>Carregue os Ficheiros</h3>
-            <p>Carregue o ficheiro E-fatura e os movimentos bancários para continuar.</p>
+          <div className="empty-message">
+            <svg className="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="12" y1="12" x2="12" y2="18" />
+              <line x1="9" y1="15" x2="15" y2="15" />
+            </svg>
+            <h3>Sem dados para reconciliar</h3>
+            <p>Não existem registos E-fatura ou movimentos bancários carregados.</p>
             <button className="start-button" onClick={() => onNavigate('upload')}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="9 11 12 14 22 4" />
-                <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
               </svg>
-              Iniciar Reconciliação
+              Carregar Ficheiros
             </button>
           </div>
         </div>
@@ -230,7 +215,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
               </thead>
               <tbody>
                 {records.map((record) => (
-                  <tr key={record.efatura_id} className={record.match_id ? 'matched' : 'unmatched'}>
+                  <tr key={record.efatura_id} className={`match-row ${getMatchStatus(record)}`}>
                     <td>{record.document_number}</td>
                     <td>{formatDate(record.document_date)}</td>
                     <td>{record.supplier_name}</td>
@@ -244,7 +229,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                     </td>
                     <td>{record.bank_reference || '-'}</td>
                     <td>
-                      {getStatusBadge(record.match_status || record.efatura_status, record.confidence_score)}
+                      <MatchStatusDropdown
+                        status={getMatchStatus(record)}
+                        confidence={record.confidence_score}
+                        onStatusChange={(newStatus) => handleStatusChange(record.efatura_id, newStatus)}
+                      />
                     </td>
                   </tr>
                 ))}

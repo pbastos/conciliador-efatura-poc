@@ -602,6 +602,95 @@ async def auto_match():
         "bank_unmatched": len(bank_movements) - matches_found
     }
 
+# Update match status
+@app.put("/api/v1/matches/{match_id}/status")
+async def update_match_status(match_id: int, status: Dict[str, str]):
+    valid_statuses = ['proposed', 'confirmed', 'rejected']
+    new_status = status.get('status')
+    
+    if new_status not in valid_statuses:
+        raise HTTPException(400, f"Invalid status. Must be one of: {', '.join(valid_statuses)}")
+    
+    try:
+        # Update match status
+        execute("""
+            UPDATE matches 
+            SET status = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (new_status, match_id))
+        
+        # If rejected, update both records to unmatched
+        if new_status == 'rejected':
+            # Get the match details
+            match = query("SELECT efatura_id, bank_id FROM matches WHERE id = ?", (match_id,))
+            if match:
+                execute("UPDATE efatura_records SET status = 'unmatched' WHERE id = ?", (match[0]['efatura_id'],))
+                execute("UPDATE bank_movements SET status = 'unmatched' WHERE id = ?", (match[0]['bank_id'],))
+        
+        return {"success": True, "status": new_status}
+        
+    except Exception as e:
+        raise HTTPException(500, f"Error updating match status: {str(e)}")
+
+# Create manual match
+@app.post("/api/v1/matches")
+async def create_manual_match(match_data: Dict[str, Any]):
+    efatura_id = match_data.get('efatura_id')
+    bank_id = match_data.get('bank_id')
+    
+    if not efatura_id or not bank_id:
+        raise HTTPException(400, "Both efatura_id and bank_id are required")
+    
+    try:
+        # Check if records exist and are unmatched
+        efatura = query("SELECT * FROM efatura_records WHERE id = ? AND status = 'unmatched'", (efatura_id,))
+        bank = query("SELECT * FROM bank_movements WHERE id = ? AND status = 'unmatched'", (bank_id,))
+        
+        if not efatura:
+            raise HTTPException(404, "E-fatura record not found or already matched")
+        if not bank:
+            raise HTTPException(404, "Bank movement not found or already matched")
+        
+        # Create match
+        execute("""
+            INSERT INTO matches (efatura_id, bank_id, confidence_score, status)
+            VALUES (?, ?, 1.0, 'confirmed')
+        """, (efatura_id, bank_id))
+        
+        # Update statuses
+        execute("UPDATE efatura_records SET status = 'matched' WHERE id = ?", (efatura_id,))
+        execute("UPDATE bank_movements SET status = 'matched' WHERE id = ?", (bank_id,))
+        
+        return {"success": True, "message": "Manual match created"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"Error creating manual match: {str(e)}")
+
+# Delete match
+@app.delete("/api/v1/matches/{match_id}")
+async def delete_match(match_id: int):
+    try:
+        # Get match details before deletion
+        match = query("SELECT efatura_id, bank_id FROM matches WHERE id = ?", (match_id,))
+        if not match:
+            raise HTTPException(404, "Match not found")
+        
+        # Delete the match
+        execute("DELETE FROM matches WHERE id = ?", (match_id,))
+        
+        # Update statuses back to unmatched
+        execute("UPDATE efatura_records SET status = 'unmatched' WHERE id = ?", (match[0]['efatura_id'],))
+        execute("UPDATE bank_movements SET status = 'unmatched' WHERE id = ?", (match[0]['bank_id'],))
+        
+        return {"success": True, "message": "Match deleted"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"Error deleting match: {str(e)}")
+
 # Health check endpoint
 @app.get("/health")
 async def health_check():
