@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(python:*)",
+      "Bash(source:*)",
+      "Bash(pip install:*)",
+      "Bash(rm:*)",
+      "Bash(cp:*)",
+      "Bash(kill:*)",
+      "Bash(npm start)",
+      "Bash(HOST=0.0.0.0 PORT=3001 npm start)",
+      "Bash(curl:*)",
+      "Bash(sqlite3:*)",
+      "Bash(pkill:*)",
+      "Bash(mkdir:*)"
+    ],
+    "deny": []
+  }
+}

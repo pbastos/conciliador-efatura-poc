@@ -98,21 +98,21 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadSuccess }) => {
 
   return (
     <div className="file-upload-container">
-      <div className="file-upload-grid">
-        <div className="file-upload-card">
-          <div className="file-upload-header">
-            <div className="file-icon">
+      <div className="upload-row">
+        <div className="upload-card">
+          <div className="upload-card-header">
+            <div className="upload-icon blue">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                 <polyline points="14 2 14 8 20 8" />
               </svg>
             </div>
-            <h2>Ficheiro E-fatura</h2>
+            <h3>Ficheiro E-fatura</h3>
           </div>
           
           <div
             {...getEfaturaRootProps()}
-            className={`file-drop-area ${isEfaturaDragActive ? 'drag-active' : ''}`}
+            className={`upload-area ${isEfaturaDragActive ? 'drag-active' : ''}`}
           >
             <input {...getEfaturaInputProps()} />
             
@@ -128,19 +128,20 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadSuccess }) => {
               </div>
             ) : (
               <>
-                <div className="drop-icon">
+                <div className="upload-icon-large">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M7 10l5-5 5 5" />
-                    <path d="M12 5v10" />
-                    <rect x="3" y="15" width="18" height="6" rx="1" />
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="17 8 12 3 7 8" />
+                    <line x1="12" y1="3" x2="12" y2="15" />
                   </svg>
                 </div>
-                <p className="drop-text">
+                <p className="upload-text">
                   {isEfaturaDragActive
                     ? 'Solte o ficheiro aqui...'
-                    : 'Arraste o ficheiro E-fatura ou clique para selecionar'}
+                    : 'Arraste o ficheiro E-fatura aqui'}
                 </p>
-                <p className="drop-formats">Formatos: XLSX, XLS, CSV</p>
+                <p className="upload-formats">XML, XLSX ou CSV</p>
+                <p className="upload-hint">Clique ou arraste para carregar</p>
               </>
             )}
           </div>
@@ -153,20 +154,20 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadSuccess }) => {
           )}
         </div>
 
-        <div className="file-upload-card">
-          <div className="file-upload-header">
-            <div className="file-icon bank">
+        <div className="upload-card">
+          <div className="upload-card-header">
+            <div className="upload-icon green">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
                 <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
               </svg>
             </div>
-            <h2>Movimentos Bancários</h2>
+            <h3>Movimentos Bancários</h3>
           </div>
           
           <div
             {...getBankRootProps()}
-            className={`file-drop-area ${isBankDragActive ? 'drag-active' : ''}`}
+            className={`upload-area ${isBankDragActive ? 'drag-active' : ''}`}
           >
             <input {...getBankInputProps()} />
             
@@ -182,19 +183,20 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadSuccess }) => {
               </div>
             ) : (
               <>
-                <div className="drop-icon">
+                <div className="upload-icon-large">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M7 10l5-5 5 5" />
-                    <path d="M12 5v10" />
-                    <rect x="3" y="15" width="18" height="6" rx="1" />
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="17 8 12 3 7 8" />
+                    <line x1="12" y1="3" x2="12" y2="15" />
                   </svg>
                 </div>
-                <p className="drop-text">
+                <p className="upload-text">
                   {isBankDragActive
                     ? 'Solte o ficheiro aqui...'
-                    : 'Arraste o ficheiro de movimentos ou clique para selecionar'}
+                    : 'Arraste o ficheiro bancário aqui'}
                 </p>
-                <p className="drop-formats">Formatos: XLSX, XLS, CSV</p>
+                <p className="upload-formats">XLSX, CSV ou OFX</p>
+                <p className="upload-hint">Clique ou arraste para carregar</p>
               </>
             )}
           </div>

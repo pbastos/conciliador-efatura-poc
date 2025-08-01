@@ -4,107 +4,118 @@
   padding: 0 24px;
 }
 
-.file-upload-grid {
+.upload-row {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 24px;
-  margin-bottom: 32px;
+  gap: 32px;
+  margin-bottom: 48px;
 }
 
-.file-upload-card {
-  background: white;
+.upload-card {
+  border: 2px dashed #e2e8f0;
   border-radius: 16px;
-  padding: 0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  border: 1px solid #e8e8e8;
   overflow: hidden;
+  transition: all 0.3s ease;
 }
 
-.file-upload-header {
+.upload-card:hover {
+  border-color: #cbd5e0;
+  transform: translateY(-2px);
+}
+
+.upload-card-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 24px;
-  background: #fafafa;
-  border-bottom: 1px solid #e8e8e8;
+  gap: 16px;
+  padding: 24px 28px;
+  background: linear-gradient(to right, #f8fafc, #f1f5f9);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 }
 
-.file-icon {
-  width: 40px;
-  height: 40px;
-  background: #dbeafe;
-  border-radius: 8px;
+.upload-icon {
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.25);
 }
 
-.file-icon.bank {
-  background: #d3f9d8;
+.upload-icon.blue {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
 }
 
-.file-icon svg {
-  width: 24px;
-  height: 24px;
-  color: #3b82f6;
+.upload-icon.green {
+  background: linear-gradient(135deg, #12b886 0%, #0fa968 100%);
+  box-shadow: 0 4px 12px rgba(18, 184, 134, 0.25);
 }
 
-.file-icon.bank svg {
-  color: #12b886;
+.upload-icon svg {
+  width: 28px;
+  height: 28px;
+  color: white;
 }
 
-.file-upload-header h2 {
+.upload-card-header h3 {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
   color: #1a1a1a;
 }
 
-.file-drop-area {
-  padding: 48px 24px;
+.upload-area {
+  padding: 56px 32px;
   text-align: center;
   cursor: pointer;
-  transition: all 0.2s;
-  background: white;
-  border: 2px dashed transparent;
-  margin: 2px;
+  transition: all 0.3s ease;
+  background: linear-gradient(to bottom, #ffffff, #f9fafb);
 }
 
-.file-drop-area:hover {
-  background: #f9fafb;
+.upload-area:hover {
+  background: linear-gradient(to bottom, #f9fafb, #f3f4f6);
 }
 
-.file-drop-area.drag-active {
-  background: #ede9fe;
+.upload-area.drag-active {
+  background: linear-gradient(to bottom, #ede9fe, #f3f1ff);
   border-color: #5b69ff;
 }
 
-.drop-icon {
-  width: 80px;
-  height: 80px;
-  background: #f3f4f6;
-  border-radius: 12px;
+.upload-icon-large {
+  width: 96px;
+  height: 96px;
+  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+  border-radius: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 auto 20px;
+  margin: 0 auto 24px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
 }
 
-.drop-icon svg {
-  width: 40px;
-  height: 40px;
+.upload-icon-large svg {
+  width: 48px;
+  height: 48px;
   color: #9ca3af;
 }
 
-.drop-text {
+.upload-text {
   font-size: 16px;
   font-weight: 500;
   color: #1a1a1a;
   margin: 0 0 8px 0;
 }
 
-.drop-formats {
+.upload-formats {
   font-size: 14px;
+  color: #6b7280;
+  margin: 0 0 16px 0;
+}
+
+.upload-hint {
+  font-size: 12px;
   color: #9ca3af;
   margin: 0;
 }
@@ -146,7 +157,7 @@
 }
 
 .file-info-card {
-  margin: 16px 24px 24px;
+  margin: 16px 28px 24px;
   padding: 12px 16px;
   background: #f3f4f6;
   border-radius: 8px;
@@ -159,28 +170,28 @@
 
 .instructions-card {
   background: white;
-  border-radius: 16px;
-  padding: 32px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  border: 1px solid #e8e8e8;
+  border-radius: 24px;
+  padding: 48px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.04);
 }
 
 .instructions-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 24px;
+  gap: 16px;
+  margin-bottom: 32px;
 }
 
 .instructions-icon {
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   color: #6b7280;
 }
 
 .instructions-header h3 {
   margin: 0;
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 600;
   color: #1a1a1a;
 }
@@ -189,12 +200,12 @@
   margin: 0;
   padding-left: 24px;
   color: #4b5563;
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.8;
 }
 
 .instructions-card li {
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 
 .instructions-card li:last-child {
@@ -218,7 +229,7 @@
 
 /* Responsive design */
 @media (max-width: 768px) {
-  .file-upload-grid {
+  .upload-row {
     grid-template-columns: 1fr;
   }
 }
