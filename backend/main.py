@@ -691,6 +691,30 @@ async def delete_match(match_id: int):
     except Exception as e:
         raise HTTPException(500, f"Error deleting match: {str(e)}")
 
+# Delete all data
+@app.delete("/api/v1/data/all")
+async def delete_all_data():
+    """
+    Delete all data from all tables (except the schema).
+    This is a dangerous operation and should be used with caution.
+    """
+    try:
+        # Delete in correct order to respect foreign key constraints
+        execute("DELETE FROM matches")
+        execute("DELETE FROM efatura_records")
+        execute("DELETE FROM bank_movements")
+        
+        # Reset auto-increment counters (SQLite specific)
+        execute("DELETE FROM sqlite_sequence WHERE name IN ('matches', 'efatura_records', 'bank_movements')")
+        
+        return {
+            "success": True,
+            "message": "Todos os dados foram apagados com sucesso"
+        }
+        
+    except Exception as e:
+        raise HTTPException(500, f"Erro ao apagar dados: {str(e)}")
+
 # Health check endpoint
 @app.get("/health")
 async def health_check():

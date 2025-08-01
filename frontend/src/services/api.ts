@@ -134,5 +134,15 @@ export const apiService = {
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
+  },
+
+  async deleteAllData(): Promise<void> {
+    const response = await fetch(`${API_URL}/api/v1/data/all`, {
+      method: 'DELETE'
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
   }
 };

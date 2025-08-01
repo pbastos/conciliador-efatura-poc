@@ -4,6 +4,7 @@ import Dashboard from './components/Dashboard';
 import FileUpload from './components/FileUpload';
 import MatchingPanel from './components/MatchingPanel';
 import ResultsPanel from './components/ResultsPanel';
+import Settings from './components/Settings';
 import Sidebar from './components/Sidebar';
 
 function App() {
@@ -51,10 +52,7 @@ function App() {
           )}
           
           {activeTab === 'settings' && (
-            <div className="placeholder-section">
-              <h2>Configurações</h2>
-              <p>Esta secção será implementada em breve.</p>
-            </div>
+            <Settings />
           )}
         </main>
       </div>
