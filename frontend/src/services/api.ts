@@ -29,6 +29,15 @@ export interface ReconciliationStats {
 }
 
 export const apiService = {
+  async checkHealth(): Promise<boolean> {
+    try {
+      const response = await fetch(`${API_URL}/health`);
+      return response.ok;
+    } catch (error) {
+      return false;
+    }
+  },
+
   async getRecordsWithMatches(limit = 100, offset = 0): Promise<EfaturaRecord[]> {
     const response = await fetch(
       `${API_URL}/api/v1/efatura/records-with-matches?limit=${limit}&offset=${offset}`

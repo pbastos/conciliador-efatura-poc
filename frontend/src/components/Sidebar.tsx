@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import './Sidebar.css';
+import { apiService } from '../services/api';
 
 interface SidebarProps {
   activeTab: string;
@@ -11,6 +12,22 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
+  const [isApiHealthy, setIsApiHealthy] = useState(true);
+
+  useEffect(() => {
+    // Check API health immediately
+    checkApiHealth();
+
+    // Check API health every 5 seconds
+    const interval = setInterval(checkApiHealth, 5000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const checkApiHealth = async () => {
+    const healthy = await apiService.checkHealth();
+    setIsApiHealthy(healthy);
+  };
   const menuItems = [
     {
       id: 'dashboard',
@@ -94,8 +111,10 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
 
       <div className="sidebar-footer">
         <div className="system-status">
-          <span className="status-dot"></span>
-          <span className="status-text">Sistema ativo</span>
+          <span className={`status-dot ${isApiHealthy ? '' : 'error'}`}></span>
+          <span className="status-text">
+            {isApiHealthy ? 'Sistema ativo' : 'API desligada'}
+          </span>
         </div>
       </div>
     </div>
