@@ -4,22 +4,39 @@ A web application for reconciling e-fatura records with bank movements, featurin
 
 ## Features
 
-- Upload Excel files containing e-fatura records
+- Upload CSV/Excel files containing e-fatura records
 - Upload Excel files containing bank movements
 - Automatic matching based on:
-  - Date (with configurable tolerance)
-  - Amount (with percentage tolerance)
-  - Description (fuzzy string matching)
+  - Date (with configurable tolerance up to 30 days)
+  - Amount (exact match with 0.01€ tolerance)
+  - Description (fuzzy string matching with 80% threshold)
 - Manual confirmation/rejection of matches
-- Export results to Excel
-- Multi-tenant support
+- Visual match confidence indicators
+- Configurable bank column mappings
+- Test data generation for demo purposes
+- Document type visualization (Fatura, Nota de crédito, etc.)
+
+## Screenshots
+
+### Dashboard
+The main dashboard shows reconciliation statistics and matched records:
+![Dashboard](screenshots/dashboard.png)
+
+### File Upload
+Upload E-fatura CSV files and bank movement Excel files:
+![File Upload](screenshots/file-upload.png)
+
+### Settings
+Configure matching threshold and bank column mappings:
+![Settings](screenshots/settings.png)
 
 ## Tech Stack
 
-- **Frontend**: React with TypeScript, Ant Design
+- **Frontend**: React with TypeScript
 - **Backend**: FastAPI (Python)
-- **Database**: Supabase (PostgreSQL)
-- **File Processing**: pandas, openpyxl
+- **Database**: SQLite
+- **File Processing**: pandas, openpyxl, xlsxwriter
+- **Matching Algorithm**: thefuzz (fuzzy string matching)
 
 ## Project Structure
 
@@ -27,77 +44,76 @@ A web application for reconciling e-fatura records with bank movements, featurin
 conciliador-efatura-poc/
 ├── frontend/          # React TypeScript application
 ├── backend/           # FastAPI Python backend
-├── database/          # Database migrations and seeds
-└── docker-compose.yml # Development environment
+├── screenshots/       # Application screenshots
+└── README.md          # This file
 ```
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js 18+
-- Python 3.10+
-- Docker and Docker Compose (for local development)
-- Supabase account
+- Node.js 16+
+- Python 3.8+
 
-### Environment Setup
+### Quick Start
 
-1. Clone the repository
-2. Copy `.env.example` to `.env` and configure:
-   ```
-   SUPABASE_URL=your_supabase_url
-   SUPABASE_ANON_KEY=your_anon_key
-   SUPABASE_SERVICE_KEY=your_service_key
-   ```
-
-### Frontend Setup
-
-```bash
-cd frontend
-npm install
-npm start
-```
-
-### Backend Setup
-
-```bash
-cd backend
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-```
-
-### Database Setup
-
-1. Create a new Supabase project
-2. Run migrations:
+1. Clone the repository:
    ```bash
-   cd database/migrations
-   # Apply migrations through Supabase dashboard or CLI
+   git clone https://github.com/pbastos/conciliador-efatura-poc.git
+   cd conciliador-efatura-poc
    ```
 
-## Development
+2. Start the backend:
+   ```bash
+   cd backend
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   pip install -r requirements.txt
+   uvicorn main:app --reload --port 8000
+   ```
 
-### Running Tests
+3. Start the frontend (in a new terminal):
+   ```bash
+   cd frontend
+   npm install
+   npm start
+   ```
 
-```bash
-# Frontend tests
-cd frontend && npm test
+4. Open http://localhost:3002 in your browser
 
-# Backend tests
-cd backend && pytest
-```
+### First Use
 
-### API Documentation
+1. Navigate to **Configurações** (Settings) to configure bank column mappings
+2. Use **Carregar Ficheiros** to upload files or generate test data
+3. View results in the **Dashboard**
+
+## API Documentation
 
 When the backend is running, visit:
-- http://localhost:8000/docs - Swagger UI
-- http://localhost:8000/redoc - ReDoc
+- http://localhost:8000/docs - Interactive API documentation
 
-## Deployment
+## Key Features Explained
 
-See `deployment.md` for production deployment instructions.
+### Matching Algorithm
+The application uses an intelligent matching algorithm that:
+- Compares E-fatura records with bank movements
+- Uses fuzzy string matching to handle variations in company names
+- Considers date proximity (up to 30 days)
+- Requires exact amount matching (with 0.01€ tolerance)
+- Calculates confidence scores for each match
+- Avoids ambiguous matches (skips when multiple candidates exist)
+
+### Test Data Generation
+Generate realistic test data directly from the UI:
+- 300 E-fatura records
+- 250 bank movements
+- ~200 guaranteed matches for demonstration
+
+### Column Mapping
+Configure which columns in your bank Excel files contain:
+- Date (Data Lançamento)
+- Description (Descrição)
+- Amount (Montante)
 
 ## License
 
