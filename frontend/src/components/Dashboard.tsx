@@ -9,6 +9,7 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   const [records, setRecords] = useState<EfaturaRecord[]>([]);
+  const [bankRecords, setBankRecords] = useState<any[]>([]);
   const [stats, setStats] = useState<ReconciliationStats>({
     total_efatura: 0,
     total_bank: 0,
@@ -19,28 +20,51 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [recordsPerPage] = useState(20);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [activeView, setActiveView] = useState<'efatura' | 'bank'>('efatura');
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [recordsData, statsData] = await Promise.all([
-          apiService.getRecordsWithMatches(50, 0),
-          apiService.getReconciliationStats()
-        ]);
-        setRecords(recordsData);
-        setStats(statsData);
+        const offset = (currentPage - 1) * recordsPerPage;
+        
+        if (activeView === 'efatura') {
+          const [recordsData, statsData] = await Promise.all([
+            apiService.getRecordsWithMatches(recordsPerPage, offset),
+            apiService.getReconciliationStats()
+          ]);
+          setRecords(recordsData.records);
+          setTotalRecords(recordsData.total);
+          setStats(statsData);
+        } else {
+          const [bankData, statsData] = await Promise.all([
+            apiService.getBankRecordsWithMatches(recordsPerPage, offset),
+            apiService.getReconciliationStats()
+          ]);
+          setBankRecords(bankData.records);
+          setTotalRecords(bankData.total);
+          setStats(statsData);
+        }
+        
         setError(null);
-      } catch (err) {
-        console.error('Error fetching dashboard data:', err);
-        setError('Erro ao carregar dados');
+      } catch (err: any) {
+        if (err.message === 'Failed to fetch') {
+          setError('API offline - Não é possível carregar os dados');
+          // Não fazer console.error porque é esperado quando a API está offline
+        } else {
+          console.error('Error fetching dashboard data:', err);
+          setError('Erro ao carregar dados');
+        }
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, []);
+  }, [currentPage, recordsPerPage, activeView]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('pt-PT', {
@@ -76,13 +100,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
       }
       
       // Refresh data to get updated state
-      const updatedRecords = await apiService.getRecordsWithMatches(50, 0);
-      setRecords(updatedRecords);
-    } catch (error) {
-      console.error('Error updating match status:', error);
+      const offset = (currentPage - 1) * recordsPerPage;
+      const updatedData = await apiService.getRecordsWithMatches(recordsPerPage, offset);
+      setRecords(updatedData.records);
+    } catch (error: any) {
+      if (error.message !== 'Failed to fetch') {
+        console.error('Error updating match status:', error);
+      }
       // Revert optimistic update on error
-      const originalRecords = await apiService.getRecordsWithMatches(50, 0);
-      setRecords(originalRecords);
+      const offset = (currentPage - 1) * recordsPerPage;
+      const originalData = await apiService.getRecordsWithMatches(recordsPerPage, offset);
+      setRecords(originalData.records);
     }
   };
 
@@ -92,6 +120,22 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     if (record.match_status === 'proposed') return 'proposed';
     if (record.match_id) return 'proposed';
     return 'unmatched';
+  };
+
+  // Calculate pagination values
+  const totalPages = Math.ceil(totalRecords / recordsPerPage);
+  const startRecord = totalRecords === 0 ? 0 : (currentPage - 1) * recordsPerPage + 1;
+  const endRecord = Math.min(currentPage * recordsPerPage, totalRecords);
+
+  const handlePageChange = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
+  const handleViewChange = (view: 'efatura' | 'bank') => {
+    setActiveView(view);
+    setCurrentPage(1); // Reset to first page when changing views
   };
 
   return (
@@ -151,7 +195,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
           <p>A carregar dados...</p>
         </div>
       ) : error ? (
-        <div className="error-section">
+        <div className={`error-section ${error.includes('API offline') ? 'api-offline' : ''}`}>
+          {error.includes('API offline') && (
+            <svg className="warning-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+          )}
           <p>{error}</p>
           <button className="start-button" onClick={() => onNavigate('upload')}>
             Carregar Ficheiros
@@ -186,66 +237,200 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
               <button className="btn-secondary" onClick={() => onNavigate('upload')}>
                 Carregar Mais Ficheiros
               </button>
-              <button className="btn-primary" onClick={() => onNavigate('matching')}>
-                Fazer Reconciliação
-              </button>
             </div>
           </div>
           
+          {/* Tab navigation */}
+          <div className="tab-navigation">
+            <button 
+              className={`tab-button ${activeView === 'efatura' ? 'active' : ''}`}
+              onClick={() => handleViewChange('efatura')}
+            >
+              E-fatura → Banco
+            </button>
+            <button 
+              className={`tab-button ${activeView === 'bank' ? 'active' : ''}`}
+              onClick={() => handleViewChange('bank')}
+            >
+              Banco → E-fatura
+            </button>
+          </div>
+          
           <div className="reconciliation-table-container">
-            <table className="reconciliation-table">
-              <thead>
-                <tr>
-                  <th colSpan={5} className="section-divider">E-fatura</th>
-                  <th colSpan={4} className="section-divider">Movimento Bancário</th>
-                  <th className="section-divider">Estado</th>
-                </tr>
-                <tr>
-                  <th>Nº Documento</th>
-                  <th>Data</th>
-                  <th>Fornecedor</th>
-                  <th>NIF</th>
-                  <th>Valor</th>
-                  <th>Data</th>
-                  <th>Descrição</th>
-                  <th>Valor</th>
-                  <th>Referência</th>
-                  <th>Estado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {records.map((record) => (
-                  <tr key={record.efatura_id} className={`match-row ${getMatchStatus(record)}`}>
-                    <td>{record.document_number}</td>
-                    <td>{formatDate(record.document_date)}</td>
-                    <td>{record.supplier_name}</td>
-                    <td>{record.supplier_nif}</td>
-                    <td className="amount">{formatCurrency(record.total_amount)}</td>
-                    
-                    <td>{record.movement_date ? formatDate(record.movement_date) : '-'}</td>
-                    <td>{record.bank_description || '-'}</td>
-                    <td className="amount">
-                      {record.bank_amount ? formatCurrency(record.bank_amount) : '-'}
-                    </td>
-                    <td>{record.bank_reference || '-'}</td>
-                    <td>
-                      <MatchStatusDropdown
-                        status={getMatchStatus(record)}
-                        confidence={record.confidence_score}
-                        onStatusChange={(newStatus) => handleStatusChange(record.efatura_id, newStatus)}
-                      />
-                    </td>
+            {activeView === 'efatura' ? (
+              <table className="reconciliation-table">
+                <thead>
+                  <tr>
+                    <th colSpan={5} className="section-divider">E-fatura</th>
+                    <th colSpan={4} className="section-divider">Movimento Bancário</th>
+                    <th className="section-divider">Estado</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                  <tr>
+                    <th>Nº Documento</th>
+                    <th>Data</th>
+                    <th>Fornecedor</th>
+                    <th>NIF</th>
+                    <th>Valor</th>
+                    <th>Data</th>
+                    <th>Descrição</th>
+                    <th>Valor</th>
+                    <th>Referência</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {records.map((record) => (
+                    <tr key={record.efatura_id} className={`match-row ${getMatchStatus(record)}`}>
+                      <td>{record.document_number}</td>
+                      <td>{formatDate(record.document_date)}</td>
+                      <td>{record.supplier_name}</td>
+                      <td>{record.supplier_nif}</td>
+                      <td className="amount">{formatCurrency(record.total_amount)}</td>
+                      
+                      <td>{record.movement_date ? formatDate(record.movement_date) : '-'}</td>
+                      <td>{record.bank_description || '-'}</td>
+                      <td className="amount">
+                        {record.bank_amount ? formatCurrency(record.bank_amount) : '-'}
+                      </td>
+                      <td>{record.bank_reference || '-'}</td>
+                      <td>
+                        <MatchStatusDropdown
+                          status={getMatchStatus(record)}
+                          confidence={record.confidence_score}
+                          onStatusChange={(newStatus) => handleStatusChange(record.efatura_id, newStatus)}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <table className="reconciliation-table">
+                <thead>
+                  <tr>
+                    <th colSpan={4} className="section-divider">Movimento Bancário</th>
+                    <th colSpan={5} className="section-divider">E-fatura</th>
+                    <th className="section-divider">Estado</th>
+                  </tr>
+                  <tr>
+                    <th>Data</th>
+                    <th>Descrição</th>
+                    <th>Valor</th>
+                    <th>Referência</th>
+                    <th>Nº Documento</th>
+                    <th>Data</th>
+                    <th>Fornecedor</th>
+                    <th>NIF</th>
+                    <th>Valor</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bankRecords.map((record) => (
+                    <tr key={record.bank_id} className={`match-row ${record.match_status || 'unmatched'}`}>
+                      <td>{formatDate(record.movement_date)}</td>
+                      <td>{record.bank_description}</td>
+                      <td className="amount">{formatCurrency(record.bank_amount)}</td>
+                      <td>{record.bank_reference || '-'}</td>
+                      
+                      <td>{record.document_number || '-'}</td>
+                      <td>{record.document_date ? formatDate(record.document_date) : '-'}</td>
+                      <td>{record.supplier_name || '-'}</td>
+                      <td>{record.supplier_nif || '-'}</td>
+                      <td className="amount">
+                        {record.total_amount ? formatCurrency(record.total_amount) : '-'}
+                      </td>
+                      <td>
+                        <MatchStatusDropdown
+                          status={record.match_status || 'unmatched'}
+                          confidence={record.confidence_score}
+                          onStatusChange={(newStatus) => handleStatusChange(record.efatura_id || '', newStatus)}
+                          disabled={!record.match_id}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
 
-          {records.length >= 50 && (
-            <div className="table-footer">
-              <p>Mostrando os primeiros 50 registos. <button className="link-button" onClick={() => onNavigate('matching')}>Ver todos na reconciliação</button></p>
+          {/* Pagination Controls */}
+          <div className="pagination-container">
+            <div className="pagination-info">
+              Mostrando {startRecord} a {endRecord} de {totalRecords} registos
             </div>
-          )}
+            
+            <div className="pagination-controls">
+              <button 
+                className="pagination-btn"
+                onClick={() => handlePageChange(1)}
+                disabled={currentPage === 1}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="11 17 6 12 11 7" />
+                  <polyline points="18 17 13 12 18 7" />
+                </svg>
+              </button>
+              
+              <button 
+                className="pagination-btn"
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+              </button>
+              
+              {/* Page numbers */}
+              <div className="pagination-numbers">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum: number;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+                  
+                  return (
+                    <button
+                      key={pageNum}
+                      className={`pagination-number ${currentPage === pageNum ? 'active' : ''}`}
+                      onClick={() => handlePageChange(pageNum)}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+              </div>
+              
+              <button 
+                className="pagination-btn"
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </button>
+              
+              <button 
+                className="pagination-btn"
+                onClick={() => handlePageChange(totalPages)}
+                disabled={currentPage === totalPages}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="13 17 18 12 13 7" />
+                  <polyline points="6 17 11 12 6 7" />
+                </svg>
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -70,3 +70,6 @@ Thumbs.db
 *.bak
 *.tmp
 *.temp
+
+# Temporary files folder
+_temp/

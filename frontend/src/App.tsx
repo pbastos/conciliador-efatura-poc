@@ -2,10 +2,9 @@ import React, { useState } from 'react';
 import './App.css';
 import Dashboard from './components/Dashboard';
 import FileUpload from './components/FileUpload';
-import MatchingPanel from './components/MatchingPanel';
-import ResultsPanel from './components/ResultsPanel';
 import Settings from './components/Settings';
 import Sidebar from './components/Sidebar';
+import ApiStatusIndicator from './components/ApiStatusIndicator';
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -17,13 +16,10 @@ function App() {
     setRefreshKey(prev => prev + 1);
   };
 
-  const handleMatchingComplete = () => {
-    setActiveTab('results');
-    setRefreshKey(prev => prev + 1);
-  };
 
   return (
     <div className="App">
+      <ApiStatusIndicator />
       <Sidebar 
         activeTab={activeTab} 
         onTabChange={setActiveTab}
@@ -37,18 +33,10 @@ function App() {
           )}
           
           {activeTab === 'upload' && (
-            <FileUpload onUploadSuccess={handleUploadSuccess} />
-          )}
-          
-          {activeTab === 'matching' && (
-            <MatchingPanel 
-              refreshKey={refreshKey} 
-              onMatchingComplete={handleMatchingComplete} 
+            <FileUpload 
+              onUploadSuccess={handleUploadSuccess} 
+              onNavigate={setActiveTab}
             />
-          )}
-          
-          {activeTab === 'results' && (
-            <ResultsPanel refreshKey={refreshKey} />
           )}
           
           {activeTab === 'settings' && (

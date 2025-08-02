@@ -38,7 +38,7 @@ export const apiService = {
     }
   },
 
-  async getRecordsWithMatches(limit = 100, offset = 0): Promise<EfaturaRecord[]> {
+  async getRecordsWithMatches(limit = 100, offset = 0): Promise<{ records: EfaturaRecord[], total: number }> {
     const response = await fetch(
       `${API_URL}/api/v1/efatura/records-with-matches?limit=${limit}&offset=${offset}`
     );
@@ -47,7 +47,14 @@ export const apiService = {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     
-    return response.json();
+    const data = await response.json();
+    
+    // Handle both old and new API response formats
+    if (Array.isArray(data)) {
+      return { records: data, total: data.length };
+    }
+    
+    return data;
   },
 
   async getReconciliationStats(): Promise<ReconciliationStats> {
@@ -144,5 +151,39 @@ export const apiService = {
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
+  },
+
+  async getSettings(): Promise<Record<string, string>> {
+    const response = await fetch(`${API_URL}/api/v1/settings`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch settings');
+    }
+    return response.json();
+  },
+
+  async updateSetting(key: string, value: string | number): Promise<any> {
+    const response = await fetch(`${API_URL}/api/v1/settings/${key}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ value }),
+    });
+    if (!response.ok) {
+      throw new Error('Failed to update setting');
+    }
+    return response.json();
+  },
+
+  async getBankRecordsWithMatches(limit = 100, offset = 0): Promise<{ records: any[], total: number }> {
+    const response = await fetch(
+      `${API_URL}/api/v1/bank/records-with-matches?limit=${limit}&offset=${offset}`
+    );
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    return response.json();
   }
 };

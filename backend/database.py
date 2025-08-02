@@ -65,10 +65,31 @@ def init_db():
             confidence_score REAL,
             status TEXT DEFAULT 'proposed',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (efatura_id) REFERENCES efatura_records(id),
             FOREIGN KEY (bank_id) REFERENCES bank_movements(id),
             UNIQUE(efatura_id, bank_id)
         )
+        """)
+        
+        # Settings table
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS settings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            key TEXT UNIQUE NOT NULL,
+            value TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
+        
+        # Insert default settings if they don't exist
+        cursor.execute("""
+        INSERT OR IGNORE INTO settings (key, value) VALUES 
+        ('confidence_threshold', '70'),
+        ('bank_column_date', ''),
+        ('bank_column_description', ''),
+        ('bank_column_amount', '')
         """)
         
         print("Database initialized successfully")

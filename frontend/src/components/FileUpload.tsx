@@ -1,20 +1,89 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import './FileUpload.css';
+import { apiService } from '../services/api';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 interface FileUploadProps {
   onUploadSuccess: (type: 'efatura' | 'bank') => void;
+  onNavigate?: (tab: string) => void;
 }
 
-const FileUpload: React.FC<FileUploadProps> = ({ onUploadSuccess }) => {
+const FileUpload: React.FC<FileUploadProps> = ({ onUploadSuccess, onNavigate }) => {
   const [efaturaFile, setEfaturaFile] = useState<File | null>(null);
   const [bankFile, setBankFile] = useState<File | null>(null);
   const [uploadingEfatura, setUploadingEfatura] = useState(false);
   const [uploadingBank, setUploadingBank] = useState(false);
   const [efaturaSuccess, setEfaturaSuccess] = useState(false);
   const [bankSuccess, setBankSuccess] = useState(false);
+  const [bankColumnsConfigured, setBankColumnsConfigured] = useState(false);
+
+  // Check if bank columns are configured
+  useEffect(() => {
+    const checkBankColumns = async () => {
+      try {
+        const settings = await apiService.getSettings();
+        const configured = !!(
+          settings.bank_column_date && 
+          settings.bank_column_description && 
+          settings.bank_column_amount
+        );
+        setBankColumnsConfigured(configured);
+      } catch (error) {
+        console.error('Error checking bank columns:', error);
+      }
+    };
+    checkBankColumns();
+  }, []);
+
+  const handleGenerateEfatura = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/v1/test-data/generate-efatura`);
+      if (!response.ok) throw new Error('Failed to generate E-fatura test file');
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'efatura_test_300_records.csv';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error: any) {
+      if (error.message === 'Failed to fetch') {
+        alert('Erro: Não foi possível conectar ao servidor. Verifique se a API está a correr.');
+      } else {
+        console.error('Error generating E-fatura test file:', error);
+        alert('Erro ao gerar ficheiro de teste E-fatura');
+      }
+    }
+  };
+
+  const handleGenerateBank = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/v1/test-data/generate-bank`);
+      if (!response.ok) throw new Error('Failed to generate bank test file');
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'bank_movements_test_250_records.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error: any) {
+      if (error.message === 'Failed to fetch') {
+        alert('Erro: Não foi possível conectar ao servidor. Verifique se a API está a correr.');
+      } else {
+        console.error('Error generating bank test file:', error);
+        alert('Erro ao gerar ficheiro de teste bancário');
+      }
+    }
+  };
 
   const uploadFile = async (file: File, type: 'efatura' | 'bank') => {
     const formData = new FormData();
@@ -35,8 +104,17 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadSuccess }) => {
       });
 
       if (response.ok) {
+        const result = await response.json();
+        console.log(`${type} upload result:`, result);
+        
         setSuccess(true);
         onUploadSuccess(type);
+        
+        // Show auto-match results if available
+        if (result.auto_match && result.auto_match.matches_found > 0) {
+          console.log(`Reconciliação automática: ${result.auto_match.matches_found} correspondências encontradas!`);
+        }
+        
         setTimeout(() => setSuccess(false), 3000);
       } else {
         const errorData = await response.json().catch(() => ({ detail: 'Erro desconhecido' }));
@@ -44,9 +122,13 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadSuccess }) => {
         console.error('Upload error:', errorData);
         alert(`Erro: ${errorMessage}`);
       }
-    } catch (error) {
-      console.error('Upload error:', error);
-      alert('Erro ao carregar ficheiro');
+    } catch (error: any) {
+      if (error.message === 'Failed to fetch') {
+        alert('Erro: Não foi possível conectar ao servidor. Verifique se a API está a correr.');
+      } else {
+        console.error('Upload error:', error);
+        alert('Erro ao carregar ficheiro');
+      }
     } finally {
       setUploading(false);
     }
@@ -125,6 +207,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadSuccess }) => {
               <div className="success-state">
                 <div className="success-icon">✓</div>
                 <p>Ficheiro carregado com sucesso!</p>
+                <p className="success-hint">Volte ao Dashboard para ver os registos</p>
               </div>
             ) : (
               <>
@@ -167,11 +250,22 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadSuccess }) => {
           
           <div
             {...getBankRootProps()}
-            className={`upload-area ${isBankDragActive ? 'drag-active' : ''}`}
+            className={`upload-area ${isBankDragActive ? 'drag-active' : ''} ${!bankColumnsConfigured ? 'disabled' : ''}`}
           >
-            <input {...getBankInputProps()} />
+            <input {...getBankInputProps()} disabled={!bankColumnsConfigured} />
             
-            {uploadingBank ? (
+            {!bankColumnsConfigured ? (
+              <div className="config-required-state">
+                <div className="warning-icon">⚠️</div>
+                <p className="warning-title">Configuração Necessária</p>
+                <p className="warning-text">
+                  Antes de carregar ficheiros bancários, deve configurar os nomes das colunas em Configurações.
+                </p>
+                <button onClick={() => onNavigate?.('settings')} className="config-link">
+                  Ir para Configurações →
+                </button>
+              </div>
+            ) : uploadingBank ? (
               <div className="uploading-state">
                 <div className="loading-spinner"></div>
                 <p>A carregar...</p>
@@ -180,6 +274,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadSuccess }) => {
               <div className="success-state">
                 <div className="success-icon">✓</div>
                 <p>Ficheiro carregado com sucesso!</p>
+                <p className="success-hint">Volte ao Dashboard para ver os registos</p>
               </div>
             ) : (
               <>
@@ -224,8 +319,52 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadSuccess }) => {
           <li>Carregue o ficheiro exportado do portal E-fatura</li>
           <li>Carregue o extrato bancário em formato Excel</li>
           <li>O sistema irá automaticamente fazer a correspondência entre os registos</li>
-          <li>Pode rever e ajustar as correspondências propostas</li>
         </ul>
+      </div>
+
+      <div className="test-data-card">
+        <div className="test-data-header">
+          <svg className="test-data-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M9 11H4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h5m0-8v8m0-8a2 2 0 0 1 2-2h2m4 0h5a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-5m0-8v8m0-8a2 2 0 0 0-2-2h-2m0 0V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v4" />
+          </svg>
+          <h3>Ficheiros de Teste</h3>
+        </div>
+        <p>Experimente o sistema com dados de demonstração. Clique para gerar e descarregar ficheiros de teste:</p>
+        <div className="test-data-buttons">
+          <button 
+            className="test-data-button"
+            onClick={handleGenerateEfatura}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+            </svg>
+            <span>
+              <strong>Gerar E-fatura Teste</strong>
+              <small>300 registos (200 com correspondência)</small>
+            </span>
+          </button>
+          <button 
+            className="test-data-button"
+            onClick={handleGenerateBank}
+            disabled={!bankColumnsConfigured}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+              <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+            </svg>
+            <span>
+              <strong>Gerar Movimentos Teste</strong>
+              <small>250 registos bancários</small>
+            </span>
+          </button>
+        </div>
+        {!bankColumnsConfigured && (
+          <p className="test-data-warning">
+            ⚠️ Configure os nomes das colunas bancárias nas Configurações antes de gerar o ficheiro de teste bancário.
+          </p>
+        )}
       </div>
     </div>
   );

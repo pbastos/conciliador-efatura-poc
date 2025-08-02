@@ -1,0 +1,51 @@
+.api-status-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background-color: #fef3c7;
+  border-bottom: 1px solid #fcd34d;
+  padding: 12px 0;
+  z-index: 1000;
+  animation: slideDown 0.3s ease-out;
+}
+
+.api-status-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 0 20px;
+}
+
+.warning-icon {
+  width: 20px;
+  height: 20px;
+  color: #d97706;
+  flex-shrink: 0;
+}
+
+.api-status-banner span {
+  font-size: 14px;
+  font-weight: 500;
+  color: #92400e;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+/* Ajustar o conteúdo principal quando o banner está visível */
+.App:has(.api-status-banner) .Sidebar {
+  top: 48px;
+  height: calc(100vh - 48px);
+}
+
+.App:has(.api-status-banner) .main-content {
+  margin-top: 48px;
+}

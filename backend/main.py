@@ -87,6 +87,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    """Health check endpoint to verify API is running"""
+    return {"status": "healthy", "service": "E-fatura Conciliador API"}
+
 # Initialize database on startup
 @app.on_event("startup")
 async def startup_event():
@@ -262,13 +268,20 @@ async def upload_efatura(file: UploadFile = File(...)):
                 errors.append(f"Row {idx + 1}: {str(row_error)}")
                 records_skipped += 1
         
+        # Run auto-matching after successful upload
+        if records_processed > 0:
+            match_result = run_auto_match()
+        else:
+            match_result = {"matches_found": 0}
+        
         result = {
             "success": True,
             "filename": file.filename,
             "file_type": file_type,
             "records_processed": records_processed,
             "records_skipped": records_skipped,
-            "total_rows": len(df)
+            "total_rows": len(df),
+            "auto_match": match_result
         }
         
         if errors:
@@ -290,6 +303,21 @@ async def upload_bank(file: UploadFile = File(...)):
         raise HTTPException(400, "Invalid file format. Please upload Excel or CSV file.")
     
     contents = await file.read()
+    
+    # Get column mappings from settings
+    settings = query("SELECT key, value FROM settings WHERE key LIKE 'bank_column_%'")
+    column_settings = {item['key']: item['value'] for item in settings}
+    
+    date_column = column_settings.get('bank_column_date', '')
+    description_column = column_settings.get('bank_column_description', '')
+    amount_column = column_settings.get('bank_column_amount', '')
+    
+    # Check if columns are configured
+    if not date_column or not description_column or not amount_column:
+        raise HTTPException(
+            400, 
+            "Bank column mappings not configured. Please go to Settings and configure the column names for Date, Description, and Amount before uploading bank files."
+        )
     
     try:
         df = None
@@ -340,43 +368,17 @@ async def upload_bank(file: UploadFile = File(...)):
         if df is None or df.empty:
             raise HTTPException(400, "File is empty or could not be parsed")
         
-        # Extended column mapping for bank files
+        # Use custom column mappings
         column_mapping = {
-            # Common Portuguese bank columns
-            'Data Movimento': 'movement_date',
-            'Data Lançamento': 'movement_date',
-            'Data Valor': 'movement_date',
-            'Data': 'movement_date',
-            'Descrição': 'description',
-            'Descricao': 'description',
-            'Descrição do Movimento': 'description',
-            'Histórico': 'description',
-            'Montante': 'amount',
-            'Valor': 'amount',
-            'Débito': 'debit',
-            'Crédito': 'credit',
-            'Referência': 'reference',
-            'Ref': 'reference',
-            'Ref.': 'reference',
-            'Saldo': 'balance',
-            # Lowercase versions
-            'data movimento': 'movement_date',
-            'data lançamento': 'movement_date',
-            'data valor': 'movement_date',
-            'data': 'movement_date',
-            'descrição': 'description',
-            'descricao': 'description',
-            'descrição do movimento': 'description',
-            'histórico': 'description',
-            'montante': 'amount',
-            'valor': 'amount',
-            'débito': 'debit',
-            'crédito': 'credit',
-            'referência': 'reference',
-            'ref': 'reference',
-            'ref.': 'reference',
-            'saldo': 'balance'
+            date_column: 'movement_date',
+            description_column: 'description',
+            amount_column: 'amount'
         }
+        
+        # Also add lowercase versions
+        column_mapping[date_column.lower()] = 'movement_date'
+        column_mapping[description_column.lower()] = 'description'
+        column_mapping[amount_column.lower()] = 'amount'
         
         # Normalize column names
         df.columns = df.columns.str.strip()
@@ -408,7 +410,21 @@ async def upload_bank(file: UploadFile = File(...)):
             available_cols = list(df.columns)
             raise HTTPException(
                 400, 
-                f"Missing required column 'amount' (or 'debit'/'credit'). Available columns: {available_cols}"
+                f"Column '{amount_column}' not found in file. Available columns: {available_cols}. Please update column mappings in Settings."
+            )
+        
+        if 'movement_date' not in df.columns:
+            available_cols = list(df.columns)
+            raise HTTPException(
+                400, 
+                f"Column '{date_column}' not found in file. Available columns: {available_cols}. Please update column mappings in Settings."
+            )
+        
+        if 'description' not in df.columns:
+            available_cols = list(df.columns)
+            raise HTTPException(
+                400, 
+                f"Column '{description_column}' not found in file. Available columns: {available_cols}. Please update column mappings in Settings."
             )
         
         # Process each row
@@ -454,13 +470,20 @@ async def upload_bank(file: UploadFile = File(...)):
                 errors.append(f"Row {idx + 1}: {str(row_error)}")
                 records_skipped += 1
         
+        # Run auto-matching after successful upload
+        if records_processed > 0:
+            match_result = run_auto_match()
+        else:
+            match_result = {"matches_found": 0}
+        
         result = {
             "success": True,
             "filename": file.filename,
             "file_type": file_type,
             "records_processed": records_processed,
             "records_skipped": records_skipped,
-            "total_rows": len(df)
+            "total_rows": len(df),
+            "auto_match": match_result
         }
         
         if errors:
@@ -498,6 +521,11 @@ async def get_bank_records(limit: int = 100, offset: int = 0):
 # Get reconciliation view (e-fatura records with matches)
 @app.get("/api/v1/efatura/records-with-matches")
 async def get_reconciliation(limit: int = 100, offset: int = 0):
+    # Get total count for pagination
+    total_count = query("""
+        SELECT COUNT(*) as count FROM efatura_records
+    """)[0]['count']
+    
     records = query("""
         SELECT 
             e.id as efatura_id,
@@ -526,11 +554,21 @@ async def get_reconciliation(limit: int = 100, offset: int = 0):
             e.document_date DESC, e.created_at DESC
         LIMIT ? OFFSET ?
     """, (limit, offset))
-    return records
+    
+    return {
+        "records": records,
+        "total": total_count,
+        "limit": limit,
+        "offset": offset
+    }
 
-# Simple matching algorithm
-@app.post("/api/v1/matching/auto-match")
-async def auto_match():
+# Helper function for auto-matching
+def run_auto_match():
+    """Run the auto-matching algorithm and return results"""
+    # Get confidence threshold from settings
+    threshold_setting = query("SELECT value FROM settings WHERE key = 'confidence_threshold'")
+    confidence_threshold = float(threshold_setting[0]['value']) / 100 if threshold_setting else 0.7
+    
     # Get unmatched records
     efatura_records = query("""
         SELECT * FROM efatura_records 
@@ -582,8 +620,8 @@ async def auto_match():
                 best_score = score
                 best_match = bank
         
-        # Create match if score is high enough
-        if best_match and best_score >= 0.7:
+        # Create match if score is high enough (use dynamic threshold)
+        if best_match and best_score >= confidence_threshold:
             execute("""
                 INSERT INTO matches (efatura_id, bank_id, confidence_score)
                 VALUES (?, ?, ?)
@@ -596,10 +634,18 @@ async def auto_match():
             matches_found += 1
     
     return {
-        "success": True,
         "matches_found": matches_found,
         "efatura_unmatched": len(efatura_records) - matches_found,
         "bank_unmatched": len(bank_movements) - matches_found
+    }
+
+# Simple matching algorithm API endpoint
+@app.post("/api/v1/matching/auto-match")
+async def auto_match():
+    result = run_auto_match()
+    return {
+        "success": True,
+        **result
     }
 
 # Update match status
@@ -719,3 +765,415 @@ async def delete_all_data():
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "database": "SQLite"}
+
+# Generate dummy E-fatura file
+@app.get("/api/v1/test-data/generate-efatura")
+async def generate_dummy_efatura():
+    """Generate a dummy E-fatura CSV file with 300 records based on realistic data"""
+    from fastapi.responses import Response
+    import random
+    from datetime import datetime, timedelta
+    
+    # Realistic Portuguese company data (anonymized versions)
+    companies = [
+        {"nif": "500649839", "name": "Lavandaria Lisboa Clean Lda", "sector": "Outros"},
+        {"nif": "513700641", "name": "Maria Santos Design Unipessoal Lda", "sector": "Outros"},
+        {"nif": "506433269", "name": "Portugal Tours, Lda", "sector": ""},
+        {"nif": "514090634", "name": "TechVault Lda", "sector": "Outros"},
+        {"nif": "503630330", "name": "TechStore - Equipamentos S A", "sector": ""},
+        {"nif": "505416654", "name": "Nordic Móveis e Decoração Lda", "sector": ""},
+        {"nif": "502544180", "name": "TelecomPT - Comunicações S A", "sector": "Outros"},
+        {"nif": "508346835", "name": "StoragePlus - Self Solutions Lda", "sector": ""},
+        {"nif": "515225142", "name": "Digital Choice, Lda", "sector": "Outros"},
+        {"nif": "503619086", "name": "BeautyCare Cosmética, Lda", "sector": "Outros"},
+        {"nif": "514610247", "name": "Serviços Chave Unipessoal Lda", "sector": "Outros"},
+        {"nif": "503629995", "name": "AutoParts Portugal - Peças Auto Sa", "sector": ""},
+        {"nif": "503311332", "name": "Lisboa Parking - Estacionamento E.M.", "sector": "Outros"},
+        {"nif": "514948809", "name": "Contabilidade Silva & Costa Lda", "sector": ""},
+        {"nif": "510938507", "name": "Cleaning Services Unipessoal Lda", "sector": "Outros"},
+        {"nif": "517318555", "name": "Tech Solutions Unipessoal Lda", "sector": ""},
+        {"nif": "503226696", "name": "Fashion Kids - Distribuição S A", "sector": ""},
+        {"nif": "518173097", "name": "Construções Rápidas Lda", "sector": "Outros"},
+        {"nif": "514458984", "name": "City Storage, Lda", "sector": ""},
+        {"nif": "500521662", "name": "Auto Repair Centro Lda", "sector": "Manutenção e reparação de veículos automóveis"},
+        {"nif": "509584489", "name": "Fleet Management Lda", "sector": "Outros"},
+        {"nif": "502011475", "name": "Supermercado Central S A", "sector": ""},
+        {"nif": "516701258", "name": "Diagnostics Lab Lda", "sector": "Outros"},
+        {"nif": "515696935", "name": "Office Solutions Lda", "sector": ""},
+        {"nif": "503020532", "name": "Adega Premium, S.A.", "sector": ""}
+    ]
+    
+    # Shared amounts that will match with bank movements
+    shared_amounts = [
+        3563.03, 3489.89, 3321.00, 3173.03, 2829.00, 2460.00, 1670.40, 1406.39,
+        974.79, 777.00, 486.00, 461.77, 461.25, 438.90, 434.37, 394.52,
+        388.00, 369.00, 340.82, 329.96, 289.05, 270.95, 250.00, 221.84,
+        221.40, 188.00, 184.50, 178.35, 170.96, 147.60, 124.04, 115.62,
+        114.50, 111.98, 110.93, 108.56, 98.21, 320.00, 88.22, 80.98,
+        79.90, 78.35, 72.85, 69.96, 66.94, 65.00, 61.50, 59.79,
+        58.00, 55.95, 54.30, 52.12, 49.98, 48.50, 46.75, 45.00,
+        43.20, 41.90, 39.99, 38.50, 37.00, 35.95, 34.50, 33.00,
+        31.50, 30.00, 28.90, 27.50, 26.00, 24.99, 23.50, 22.00,
+        21.00, 19.99, 18.50, 17.00, 16.50, 15.99, 14.50, 13.00,
+        12.50, 11.99, 10.50, 9.99, 8.50, 7.99, 6.50, 5.99
+    ]
+    
+    # Add more random amounts to reach 200 shared amounts
+    while len(shared_amounts) < 200:
+        shared_amounts.append(round(random.uniform(10, 1000), 2))
+    
+    # Generate dates for the last 4 months
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=120)
+    
+    # CSV header with BOM for Excel compatibility
+    csv_lines = ['Setor;Emitente;Nº Fatura / ATCUD;Tipo;Data Emissão;Total;IVA;Base Tributável;Situação;Comunicação  Emitente;Comunicação  Adquirente']
+    
+    # Generate 300 records
+    for i in range(300):
+        # Random date
+        random_days = random.randint(0, 120)
+        doc_date = start_date + timedelta(days=random_days)
+        
+        # Use shared amounts for first 200, random for the rest
+        if i < 200:
+            total = shared_amounts[i]
+        else:
+            total = round(random.uniform(10, 1000), 2)
+        
+        # Calculate VAT (various rates used in Portugal)
+        vat_rates = [0.23, 0.13, 0.06]  # Normal, Intermediate, Reduced
+        vat_rate = random.choice(vat_rates) if random.random() > 0.8 else 0.23  # 80% use normal rate
+        base = round(total / (1 + vat_rate), 2)
+        vat = round(total - base, 2)
+        
+        # Select company
+        company = random.choice(companies)
+        
+        # Generate realistic invoice number
+        doc_types = ["FT", "FR", "FAC", "FS", "F"]
+        doc_type = random.choice(doc_types)
+        invoice_num = f"{doc_type} {doc_date.strftime('%Y')}/{i+1:04d} / JF{random.randint(100000, 999999)}-{i+1}"
+        
+        # Document type
+        tipos = ["Fatura", "Fatura-recibo", "Fatura simplificada", "Nota de crédito"]
+        tipo = random.choice(tipos) if random.random() > 0.1 else "Fatura"
+        
+        # Create CSV line with proper formatting
+        total_str = f"{total:.2f} €".replace('.', ',')
+        vat_str = f"{vat:.2f} €".replace('.', ',')
+        base_str = f"{base:.2f} €".replace('.', ',')
+        
+        line = f'"{company["sector"]}";"{company["nif"]} - {company["name"]}";"{invoice_num}";"{tipo}";"{doc_date.strftime("%Y-%m-%d")}";"{total_str}";"{vat_str}";"{base_str}";"Registado";"X";""'
+        csv_lines.append(line)
+    
+    # Join all lines
+    csv_content = "\n".join(csv_lines)
+    
+    # Return as CSV file with UTF-8 BOM
+    return Response(
+        content=csv_content.encode('utf-8-sig'),
+        media_type='text/csv; charset=utf-8',
+        headers={
+            'Content-Disposition': 'attachment; filename="efatura_test_300_records.csv"'
+        }
+    )
+
+# Generate dummy bank movements file
+@app.get("/api/v1/test-data/generate-bank")
+async def generate_dummy_bank():
+    """Generate a dummy bank movements Excel file with 250 records based on realistic data"""
+    from fastapi.responses import Response
+    import random
+    from datetime import datetime, timedelta
+    import xlsxwriter
+    import io
+    
+    # Get column names from settings
+    settings = query("SELECT key, value FROM settings WHERE key LIKE 'bank_column_%'")
+    column_settings = {item['key']: item['value'] for item in settings}
+    
+    date_column = column_settings.get('bank_column_date', '')
+    description_column = column_settings.get('bank_column_description', '')
+    amount_column = column_settings.get('bank_column_amount', '')
+    
+    # If columns not configured, use defaults from real bank file
+    if not date_column:
+        date_column = 'Data Lançamento'
+    if not description_column:
+        description_column = 'Descrição'
+    if not amount_column:
+        amount_column = 'Montante'
+    
+    # Company names that will match E-fatura (for successful matches)
+    matching_companies = [
+        "Lavandaria Lisboa Clean", "Maria Santos Design", "Portugal Tours",
+        "TechVault", "TechStore", "Nordic Móveis", "TelecomPT",
+        "StoragePlus", "Digital Choice", "BeautyCare", "Serviços Chave",
+        "AutoParts Portugal", "Lisboa Parking", "Contabilidade Silva Costa",
+        "Cleaning Services", "Tech Solutions", "Fashion Kids", "Construções Rápidas",
+        "City Storage", "Auto Repair Centro", "Fleet Management", "Supermercado Central",
+        "Diagnostics Lab", "Office Solutions", "Adega Premium"
+    ]
+    
+    # Additional names for non-matching movements (like personal transfers)
+    person_names = [
+        "João Silva", "Maria Santos", "Pedro Costa", "Ana Ferreira",
+        "Carlos Oliveira", "Sofia Rodrigues", "Miguel Pereira", "Beatriz Alves",
+        "Ricardo Martins", "Catarina Sousa", "Tiago Fernandes", "Inês Gonçalves",
+        "André Lopes", "Mariana Ribeiro", "Bruno Cardoso", "Rita Nunes"
+    ]
+    
+    # Shared amounts that will match with E-fatura
+    shared_amounts = [
+        3563.03, 3489.89, 3321.00, 3173.03, 2829.00, 2460.00, 1670.40, 1406.39,
+        974.79, 777.00, 486.00, 461.77, 461.25, 438.90, 434.37, 394.52,
+        388.00, 369.00, 340.82, 329.96, 289.05, 270.95, 250.00, 221.84,
+        221.40, 188.00, 184.50, 178.35, 170.96, 147.60, 124.04, 115.62,
+        114.50, 111.98, 110.93, 108.56, 98.21, 320.00, 88.22, 80.98,
+        79.90, 78.35, 72.85, 69.96, 66.94, 65.00, 61.50, 59.79,
+        58.00, 55.95, 54.30, 52.12, 49.98, 48.50, 46.75, 45.00,
+        43.20, 41.90, 39.99, 38.50, 37.00, 35.95, 34.50, 33.00,
+        31.50, 30.00, 28.90, 27.50, 26.00, 24.99, 23.50, 22.00,
+        21.00, 19.99, 18.50, 17.00, 16.50, 15.99, 14.50, 13.00,
+        12.50, 11.99, 10.50, 9.99, 8.50, 7.99, 6.50, 5.99
+    ]
+    
+    # Add more random amounts to reach 200 shared amounts
+    while len(shared_amounts) < 200:
+        shared_amounts.append(round(random.uniform(10, 1000), 2))
+    
+    # Generate dates for the last 4 months
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=120)
+    
+    # Create in-memory Excel file
+    output = io.BytesIO()
+    workbook = xlsxwriter.Workbook(output, {'in_memory': True})
+    worksheet = workbook.add_worksheet()
+    
+    # Add bank header rows (mimicking real bank export format)
+    worksheet.write(0, 0, 'Millennium bcp')
+    worksheet.write(1, 0, 'Conta')
+    worksheet.write(1, 2, '0000012345678901 - EUR')
+    worksheet.write(2, 0, 'Data de inicio')
+    worksheet.write(2, 2, start_date.strftime('%d/%m/%Y'))
+    worksheet.write(3, 0, 'Data fim')
+    worksheet.write(3, 2, end_date.strftime('%d/%m/%Y'))
+    worksheet.write(4, 0, 'Tipos de Pesquisa')
+    worksheet.write(4, 2, 'Todos')
+    worksheet.write(5, 0, 'Data de exportação')
+    worksheet.write(5, 2, datetime.now().strftime('%d-%m-%Y %H:%M:%S'))
+    
+    # Empty row
+    worksheet.write(6, 0, '')
+    
+    # Add column headers
+    headers = [date_column, 'Data Valor', description_column, amount_column, 'Saldo Contabilistico', 'Moeda', 'Notas', 'Tratado']
+    for col, header in enumerate(headers):
+        worksheet.write(7, col, header)
+    
+    # Generate 250 records
+    balance = 50000.00  # Starting balance
+    movements = []
+    
+    # First, create 200 matching movements
+    for i in range(200):
+        random_days = random.randint(0, 120)
+        date_offset = random.randint(0, 3)  # Bank movements usually happen a few days after invoice
+        movement_date = start_date + timedelta(days=random_days + date_offset)
+        
+        amount = -shared_amounts[i]  # Negative for payments
+        company = random.choice(matching_companies)
+        
+        # Create realistic payment descriptions
+        desc_types = [
+            f"TRF P/ {company}",
+            f"DD {company}",
+            f"ORDEM PERMANENTE {company}",
+            f"{company.upper()} LISBOA PRT",
+            f"PAGAMENTO {company}",
+            f"TRF. P/O {company} FT"
+        ]
+        
+        description = random.choice(desc_types)
+        
+        movements.append({
+            'date': movement_date,
+            'description': description,
+            'amount': amount,
+            'is_match': True
+        })
+    
+    # Add 50 non-matching movements (personal transfers, ATM, etc.)
+    for i in range(50):
+        random_days = random.randint(0, 120)
+        movement_date = start_date + timedelta(days=random_days)
+        
+        # Random amounts for non-matching movements
+        amount = round(random.uniform(-500, 500), 2)
+        
+        # Various types of non-matching movements
+        movement_types = [
+            lambda: f"TRF P/ {random.choice(person_names)}",
+            lambda: f"LEV ATM {random.randint(1000, 9999)}",
+            lambda: "COMISSAO MANUTENCAO CONTA",
+            lambda: f"DD PayPal {random.randint(1000000, 9999999)}",
+            lambda: "TRF RECEBIDA",
+            lambda: f"MB WAY P/ {random.choice(person_names)}",
+            lambda: "IMPOSTO SELO",
+            lambda: "JURO CREDITO HABITACAO"
+        ]
+        
+        description = random.choice(movement_types)()
+        
+        movements.append({
+            'date': movement_date,
+            'description': description,
+            'amount': amount,
+            'is_match': False
+        })
+    
+    # Sort movements by date (descending, like real bank statements)
+    movements.sort(key=lambda x: x['date'], reverse=True)
+    
+    # Write movements to Excel
+    for i, movement in enumerate(movements):
+        row = i + 8  # Starting after headers
+        
+        # Update balance
+        balance += movement['amount']
+        
+        # Write row data
+        worksheet.write(row, 0, movement['date'].strftime('%d/%m/%Y'))
+        worksheet.write(row, 1, movement['date'].strftime('%d/%m/%Y'))  # Data Valor same as Data Lançamento
+        worksheet.write(row, 2, movement['description'])
+        worksheet.write(row, 3, movement['amount'])
+        worksheet.write(row, 4, balance)
+        worksheet.write(row, 5, 'EUR')
+        worksheet.write(row, 6, None)  # Notas
+        worksheet.write(row, 7, 'Não')  # Tratado
+    
+    workbook.close()
+    output.seek(0)
+    
+    # Return as Excel file
+    return Response(
+        content=output.read(),
+        media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={
+            'Content-Disposition': 'attachment; filename="bank_movements_test_250_records.xlsx"'
+        }
+    )
+
+# Get settings
+@app.get("/api/v1/settings")
+async def get_settings():
+    """Get all settings"""
+    try:
+        settings = query("SELECT key, value FROM settings")
+        # Convert to dict for easier access
+        settings_dict = {item['key']: item['value'] for item in settings}
+        return settings_dict
+    except Exception as e:
+        raise HTTPException(500, f"Error retrieving settings: {str(e)}")
+
+# Update a setting
+@app.put("/api/v1/settings/{key}")
+async def update_setting(key: str, setting: Dict[str, Any]):
+    """Update a specific setting"""
+    value = setting.get('value')
+    if value is None:
+        raise HTTPException(400, "Value is required")
+    
+    try:
+        # Check if setting exists
+        existing = query("SELECT id FROM settings WHERE key = ?", (key,))
+        
+        if existing:
+            # Update existing setting
+            execute("""
+                UPDATE settings 
+                SET value = ?, updated_at = CURRENT_TIMESTAMP 
+                WHERE key = ?
+            """, (str(value), key))
+        else:
+            # Insert new setting
+            execute("""
+                INSERT INTO settings (key, value) 
+                VALUES (?, ?)
+            """, (key, str(value)))
+        
+        return {"success": True, "key": key, "value": value}
+    except Exception as e:
+        raise HTTPException(500, f"Error updating setting: {str(e)}")
+
+# Get bank movements with matches
+@app.get("/api/v1/bank/records-with-matches")
+async def get_bank_reconciliation(limit: int = 100, offset: int = 0):
+    # Get total count for pagination
+    total_count = query("""
+        SELECT COUNT(*) as count FROM bank_movements
+    """)[0]['count']
+    
+    records = query("""
+        SELECT 
+            b.id as bank_id,
+            b.movement_date,
+            b.description as bank_description,
+            b.amount as bank_amount,
+            b.reference as bank_reference,
+            b.status as bank_status,
+            m.id as match_id,
+            m.confidence_score,
+            m.status as match_status,
+            e.id as efatura_id,
+            e.document_number,
+            e.document_date,
+            e.supplier_name,
+            e.supplier_nif,
+            e.total_amount,
+            e.tax_amount
+        FROM 
+            bank_movements b
+        LEFT JOIN 
+            matches m ON b.id = m.bank_id AND m.status != 'rejected'
+        LEFT JOIN 
+            efatura_records e ON m.efatura_id = e.id
+        ORDER BY 
+            b.movement_date DESC, b.created_at DESC
+        LIMIT ? OFFSET ?
+    """, (limit, offset))
+    
+    return {
+        "records": records,
+        "total": total_count,
+        "limit": limit,
+        "offset": offset
+    }
+
+# Get matching summary stats
+@app.get("/api/v1/matching/summary")
+async def get_matching_summary():
+    """Get summary statistics for matching"""
+    try:
+        total_efatura = query("SELECT COUNT(*) as count FROM efatura_records")[0]['count']
+        total_bank = query("SELECT COUNT(*) as count FROM bank_movements")[0]['count']
+        total_matches = query("SELECT COUNT(*) as count FROM matches WHERE status != 'rejected'")[0]['count']
+        unmatched_efatura = query("SELECT COUNT(*) as count FROM efatura_records WHERE status = 'unmatched'")[0]['count']
+        unmatched_bank = query("SELECT COUNT(*) as count FROM bank_movements WHERE status = 'unmatched'")[0]['count']
+        
+        match_rate = 0
+        if total_efatura > 0:
+            match_rate = (total_matches / total_efatura) * 100
+        
+        return {
+            "total_efatura_records": total_efatura,
+            "total_bank_records": total_bank,
+            "total_matches": total_matches,
+            "unmatched_efatura_records": unmatched_efatura,
+            "unmatched_bank_records": unmatched_bank,
+            "match_rate": match_rate
+        }
+    except Exception as e:
+        raise HTTPException(500, f"Error getting matching summary: {str(e)}")
