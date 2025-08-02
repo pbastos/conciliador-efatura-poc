@@ -279,9 +279,21 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {records.map((record) => (
-                    <tr key={record.efatura_id} className={`match-row ${getMatchStatus(record)}`}>
-                      <td>{record.document_number}</td>
+                  {records.map((record, index) => (
+                    <tr key={`efatura-${record.efatura_id}-${index}`} className={`match-row ${getMatchStatus(record)}`}>
+                      <td>
+                        <div className="document-info">
+                          <div className="document-number">{record.document_number}</div>
+                          {record.document_type && (
+                            <span 
+                              className="document-type-pill" 
+                              data-type={record.document_type.toLowerCase().replace(/\s+/g, '-')}
+                            >
+                              {record.document_type}
+                            </span>
+                          )}
+                        </div>
+                      </td>
                       <td>{formatDate(record.document_date)}</td>
                       <td>{record.supplier_name}</td>
                       <td>{record.supplier_nif}</td>
@@ -326,14 +338,28 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {bankRecords.map((record) => (
-                    <tr key={record.bank_id} className={`match-row ${record.match_status || 'unmatched'}`}>
+                  {bankRecords.map((record, index) => (
+                    <tr key={`bank-${record.bank_id}-${index}`} className={`match-row ${record.match_status || 'unmatched'}`}>
                       <td>{formatDate(record.movement_date)}</td>
                       <td>{record.bank_description}</td>
                       <td className="amount">{formatCurrency(record.bank_amount)}</td>
                       <td>{record.bank_reference || '-'}</td>
                       
-                      <td>{record.document_number || '-'}</td>
+                      <td>
+                        {record.document_number ? (
+                          <div className="document-info">
+                            <div className="document-number">{record.document_number}</div>
+                            {record.document_type && (
+                              <span 
+                                className="document-type-pill" 
+                                data-type={record.document_type.toLowerCase().replace(/\s+/g, '-')}
+                              >
+                                {record.document_type}
+                              </span>
+                            )}
+                          </div>
+                        ) : '-'}
+                      </td>
                       <td>{record.document_date ? formatDate(record.document_date) : '-'}</td>
                       <td>{record.supplier_name || '-'}</td>
                       <td>{record.supplier_nif || '-'}</td>

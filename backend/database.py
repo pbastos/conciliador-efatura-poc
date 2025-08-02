@@ -33,6 +33,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS efatura_records (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             document_number TEXT,
+            document_type TEXT,
             document_date DATE,
             supplier_name TEXT,
             supplier_nif TEXT,
@@ -91,6 +92,19 @@ def init_db():
         ('bank_column_description', ''),
         ('bank_column_amount', '')
         """)
+        
+        # Add document_type column if it doesn't exist (for existing databases)
+        try:
+            cursor.execute("PRAGMA table_info(efatura_records)")
+            columns_info = cursor.fetchall()
+            # PRAGMA table_info returns tuples: (cid, name, type, notnull, dflt_value, pk)
+            column_names = [row[1] for row in columns_info]
+            
+            if columns_info and 'document_type' not in column_names:
+                cursor.execute("ALTER TABLE efatura_records ADD COLUMN document_type TEXT")
+                print("Added document_type column to efatura_records table")
+        except Exception as e:
+            print(f"Note: Could not check/add document_type column: {e}")
         
         print("Database initialized successfully")
 

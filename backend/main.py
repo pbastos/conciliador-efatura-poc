@@ -1,10 +1,14 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Dict, Any, Optional
 import pandas as pd
 import io
 from datetime import datetime
 import re
+from thefuzz import fuzz
+import csv
+import xlsxwriter
+import random
 
 from database import init_db, query, execute
 
@@ -252,10 +256,11 @@ async def upload_efatura(file: UploadFile = File(...)):
                 # Insert record
                 execute("""
                     INSERT INTO efatura_records 
-                    (document_number, document_date, supplier_name, supplier_nif, total_amount, tax_amount)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    (document_number, document_type, document_date, supplier_name, supplier_nif, total_amount, tax_amount)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                 """, (
                     str(row.get('document_number', '')).strip(),
+                    str(row.get('document_type', 'Fatura')).strip(),
                     doc_date,
                     str(row.get('supplier_name', '')).strip(),
                     supplier_nif,
@@ -530,6 +535,7 @@ async def get_reconciliation(limit: int = 100, offset: int = 0):
         SELECT 
             e.id as efatura_id,
             e.document_number,
+            e.document_type,
             e.document_date,
             e.supplier_name,
             e.supplier_nif,
@@ -562,9 +568,105 @@ async def get_reconciliation(limit: int = 100, offset: int = 0):
         "offset": offset
     }
 
-# Helper function for auto-matching
+# Helper function for auto-matching - exact MyConcierge logic
+def calculate_match_confidence_efatura(efatura: Dict[str, Any], bank: Dict[str, Any]) -> float:
+    """
+    Calculate match confidence for E-fatura to Bank matching.
+    Based on MyConcierge's calculate_match_confidence logic with date tolerance.
+    """
+    confidence = 1.0  # Start with perfect confidence
+    
+    # Add date proximity factor (within 30 days)
+    try:
+        efatura_date = datetime.strptime(efatura['document_date'], '%Y-%m-%d').date()
+        bank_date = datetime.strptime(bank['movement_date'], '%Y-%m-%d').date()
+        days_diff = abs((efatura_date - bank_date).days)
+        
+        if days_diff == 0:
+            # Same day - no reduction
+            pass
+        elif days_diff <= 7:
+            # Within a week - small reduction
+            confidence *= 0.95
+        elif days_diff <= 30:
+            # Within 30 days - gradual reduction
+            confidence *= (0.8 + 0.15 * (1 - (days_diff - 7) / 23))
+    except:
+        confidence *= 0.7  # Significant reduction if dates can't be parsed
+    
+    # Check description/name matching using fuzzy string matching
+    name_match = False
+    if bank.get('description') and efatura.get('supplier_name'):
+        # Clean and normalize descriptions
+        bank_desc = bank['description'].lower().strip()
+        supplier_name = efatura['supplier_name'].lower().strip()
+        
+        # Remove common bank prefixes
+        prefixes = ['dd ', 'trf ', 'transf ', 'trans ', 'compra ', 'pagamento ']
+        for prefix in prefixes:
+            if bank_desc.startswith(prefix):
+                bank_desc = bank_desc[len(prefix):]
+        
+        # Use fuzzy string matching with partial_ratio (like MyConcierge)
+        name_score = fuzz.partial_ratio(supplier_name, bank_desc) / 100.0
+        name_match = name_score > 0.8
+    
+    if not name_match:
+        confidence *= 0.9  # Reduce confidence by 10% if names don't match well
+    
+    return confidence
+
+def calculate_match_confidence_bank(bank: Dict[str, Any], efatura: Dict[str, Any]) -> float:
+    """
+    Calculate match confidence for Bank to E-fatura matching.
+    Based on MyConcierge's bank movement matching logic with more tolerant dates.
+    """
+    confidence = 1.0  # Start with perfect confidence
+    
+    # Check date proximity (within ±30 days)
+    try:
+        bank_date = datetime.strptime(bank['movement_date'], '%Y-%m-%d').date()
+        efatura_date = datetime.strptime(efatura['document_date'], '%Y-%m-%d').date()
+        days_diff = abs((bank_date - efatura_date).days)
+        
+        if days_diff > 30:
+            return 0.0  # Dates too far apart, reject match
+        elif days_diff > 5:
+            # Gradual reduction for dates beyond 5 days
+            confidence *= (0.7 + 0.3 * (1 - (days_diff - 5) / 25))
+        elif days_diff > 0:
+            # Original MyConcierge logic for first 5 days - reduce by 6% per day
+            confidence *= (1 - (days_diff * 0.06))
+    except:
+        return 0.0
+    
+    # Check description similarity
+    if efatura.get('supplier_name') and bank.get('description'):
+        # Clean and normalize descriptions
+        bank_desc = bank['description'].lower()
+        supplier_name = efatura['supplier_name'].lower()
+        
+        # Remove common prefixes from bank description
+        prefixes = ['dd ', 'trf ', 'transf ', 'trans ']
+        for prefix in prefixes:
+            if bank_desc.startswith(prefix):
+                bank_desc = bank_desc[len(prefix):]
+        
+        # Calculate similarity score using fuzzy matching
+        desc_score = fuzz.partial_ratio(bank_desc, supplier_name) / 100.0
+        
+        # Description similarity affects up to 50% of the confidence
+        confidence *= (0.5 + (desc_score * 0.5))
+    
+    return confidence
+
 def run_auto_match():
-    """Run the auto-matching algorithm and return results"""
+    """
+    Run the auto-matching algorithm using MyConcierge logic with date tolerance.
+    Match criteria:
+    1. For E-fatura matching: Within 30 days, exact amount (0.01 tolerance)
+    2. For Bank matching: Within 30 days, exact amount (0.01 tolerance), min 70% confidence
+    """
     # Get confidence threshold from settings
     threshold_setting = query("SELECT value FROM settings WHERE key = 'confidence_threshold'")
     confidence_threshold = float(threshold_setting[0]['value']) / 100 if threshold_setting else 0.7
@@ -581,62 +683,147 @@ def run_auto_match():
     """)
     
     matches_found = 0
+    skipped_multiple_matches = 0
+    skipped_no_matches = 0
     
-    # Simple matching by amount and date proximity
+    # Keep track of matched records to ensure 1:1 matching
+    matched_banks = set()
+    
+    # Match E-fatura records with Bank movements (MyConcierge efatura logic)
     for efatura in efatura_records:
-        best_match = None
-        best_score = 0
-        
-        for bank in bank_movements:
-            # Skip if already matched
-            if bank.get('status') != 'unmatched':
+        try:
+            efatura_date = datetime.strptime(efatura['document_date'], '%Y-%m-%d').date()
+            efatura_total = float(efatura['total_amount'])
+            
+            # Find all potential matches
+            potential_matches = []
+            for bank in bank_movements:
+                # Skip if already matched
+                if bank['id'] in matched_banks:
+                    continue
+                    
+                try:
+                    bank_date = datetime.strptime(bank['movement_date'], '%Y-%m-%d').date()
+                    bank_total = abs(float(bank['amount']))  # Convert to positive
+                    
+                    # Check for amount match first (must be exact)
+                    if abs(efatura_total - bank_total) < 0.01:
+                        # Check date proximity (within 30 days for E-fatura to Bank)
+                        days_diff = abs((efatura_date - bank_date).days)
+                        if days_diff <= 30:
+                            potential_matches.append(bank)
+                except:
+                    continue
+            
+            # Skip if multiple matches found (like MyConcierge)
+            if len(potential_matches) > 1:
+                skipped_multiple_matches += 1
+                continue
+            
+            # Skip if no matches found
+            if len(potential_matches) == 0:
+                skipped_no_matches += 1
                 continue
                 
-            # Calculate match score
-            score = 0
+            # Process single match
+            bank = potential_matches[0]
             
-            # Exact amount match
-            if abs(efatura['total_amount'] - abs(bank['amount'])) < 0.01:
-                score += 0.7
-            # Close amount (within 1%)
-            elif abs(efatura['total_amount'] - abs(bank['amount'])) / efatura['total_amount'] < 0.01:
-                score += 0.5
-            else:
-                continue  # Skip if amount doesn't match
+            # Calculate match confidence using MyConcierge logic
+            confidence = calculate_match_confidence_efatura(efatura, bank)
             
-            # Date proximity (same month)
-            if efatura['document_date'] and bank['movement_date']:
-                try:
-                    e_date = datetime.strptime(efatura['document_date'], '%Y-%m-%d')
-                    b_date = datetime.strptime(bank['movement_date'], '%Y-%m-%d')
+            # Create match if confidence is high enough
+            if confidence >= confidence_threshold:
+                execute("""
+                    INSERT INTO matches (efatura_id, bank_id, confidence_score, status)
+                    VALUES (?, ?, ?, 'proposed')
+                """, (efatura['id'], bank['id'], confidence))
+                
+                # Update status
+                execute("UPDATE efatura_records SET status = 'matched' WHERE id = ?", (efatura['id'],))
+                execute("UPDATE bank_movements SET status = 'matched' WHERE id = ?", (bank['id'],))
+                
+                # Mark bank as matched
+                matched_banks.add(bank['id'])
+                
+                matches_found += 1
+                
+        except Exception as e:
+            continue
+    
+    # Now try Bank to E-fatura matching for remaining unmatched (MyConcierge bank logic)
+    remaining_efatura = query("""
+        SELECT * FROM efatura_records 
+        WHERE status = 'unmatched'
+    """)
+    
+    remaining_banks = query("""
+        SELECT * FROM bank_movements 
+        WHERE status = 'unmatched'
+    """)
+    
+    for bank in remaining_banks:
+        try:
+            bank_date = datetime.strptime(bank['movement_date'], '%Y-%m-%d').date()
+            bank_value = abs(float(bank['amount']))
+            
+            # Find all potential matches within date window
+            potential_matches = []
+            for efatura in remaining_efatura:
+                if efatura.get('status') != 'unmatched':
+                    continue
                     
-                    days_diff = abs((e_date - b_date).days)
-                    if days_diff <= 30:
-                        score += 0.3 * (1 - days_diff / 30)
+                try:
+                    efatura_date = datetime.strptime(efatura['document_date'], '%Y-%m-%d').date()
+                    efatura_value = float(efatura['total_amount'])
+                    
+                    # Check for value match with small tolerance
+                    if abs(bank_value - efatura_value) > 0.01:
+                        continue
+                        
+                    # Check date proximity (within 30 days for Bank to E-fatura)
+                    if abs((bank_date - efatura_date).days) > 30:
+                        continue
+                    
+                    # Calculate match confidence
+                    confidence = calculate_match_confidence_bank(bank, efatura)
+                    if confidence >= 0.70:  # MyConcierge uses 70% minimum
+                        potential_matches.append((efatura, confidence))
                 except:
-                    pass
+                    continue
             
-            if score > best_score:
-                best_score = score
-                best_match = bank
-        
-        # Create match if score is high enough (use dynamic threshold)
-        if best_match and best_score >= confidence_threshold:
+            # Skip if multiple matches found
+            if len(potential_matches) > 1:
+                skipped_multiple_matches += 1
+                continue
+            
+            # Skip if no matches found
+            if len(potential_matches) == 0:
+                skipped_no_matches += 1
+                continue
+                
+            # Process single match
+            efatura, confidence = potential_matches[0]
+            
             execute("""
-                INSERT INTO matches (efatura_id, bank_id, confidence_score)
-                VALUES (?, ?, ?)
-            """, (efatura['id'], best_match['id'], best_score))
+                INSERT INTO matches (efatura_id, bank_id, confidence_score, status)
+                VALUES (?, ?, ?, 'proposed')
+            """, (efatura['id'], bank['id'], confidence))
             
             # Update status
             execute("UPDATE efatura_records SET status = 'matched' WHERE id = ?", (efatura['id'],))
-            execute("UPDATE bank_movements SET status = 'matched' WHERE id = ?", (best_match['id'],))
+            execute("UPDATE bank_movements SET status = 'matched' WHERE id = ?", (bank['id'],))
             
             matches_found += 1
+            
+        except Exception as e:
+            continue
     
     return {
         "matches_found": matches_found,
         "efatura_unmatched": len(efatura_records) - matches_found,
-        "bank_unmatched": len(bank_movements) - matches_found
+        "bank_unmatched": len(bank_movements) - matches_found,
+        "skipped_multiple_matches": skipped_multiple_matches,
+        "skipped_no_matches": skipped_no_matches
     }
 
 # Simple matching algorithm API endpoint
@@ -838,17 +1025,19 @@ async def generate_dummy_efatura():
         # Use shared amounts for first 200, random for the rest
         if i < 200:
             total = shared_amounts[i]
+            # For matching records, use the same company pattern as bank movements
+            company_index = i % len(companies)
+            company = companies[company_index]
         else:
             total = round(random.uniform(10, 1000), 2)
+            # For non-matching records, use random companies
+            company = random.choice(companies)
         
         # Calculate VAT (various rates used in Portugal)
         vat_rates = [0.23, 0.13, 0.06]  # Normal, Intermediate, Reduced
         vat_rate = random.choice(vat_rates) if random.random() > 0.8 else 0.23  # 80% use normal rate
         base = round(total / (1 + vat_rate), 2)
         vat = round(total - base, 2)
-        
-        # Select company
-        company = random.choice(companies)
         
         # Generate realistic invoice number
         doc_types = ["FT", "FR", "FAC", "FS", "F"]
@@ -905,15 +1094,33 @@ async def generate_dummy_bank():
     if not amount_column:
         amount_column = 'Montante'
     
-    # Company names that will match E-fatura (for successful matches)
-    matching_companies = [
-        "Lavandaria Lisboa Clean", "Maria Santos Design", "Portugal Tours",
-        "TechVault", "TechStore", "Nordic Móveis", "TelecomPT",
-        "StoragePlus", "Digital Choice", "BeautyCare", "Serviços Chave",
-        "AutoParts Portugal", "Lisboa Parking", "Contabilidade Silva Costa",
-        "Cleaning Services", "Tech Solutions", "Fashion Kids", "Construções Rápidas",
-        "City Storage", "Auto Repair Centro", "Fleet Management", "Supermercado Central",
-        "Diagnostics Lab", "Office Solutions", "Adega Premium"
+    # Same companies from E-fatura for successful matches
+    efatura_companies = [
+        {"nif": "500649839", "name": "Lavandaria Lisboa Clean Lda", "short": "LAVANDARIA LISBOA"},
+        {"nif": "513700641", "name": "Maria Santos Design Unipessoal Lda", "short": "MARIA SANTOS DESIGN"},
+        {"nif": "506433269", "name": "Portugal Tours, Lda", "short": "PORTUGAL TOURS"},
+        {"nif": "514090634", "name": "TechVault Lda", "short": "TECHVAULT"},
+        {"nif": "503630330", "name": "TechStore - Equipamentos S A", "short": "TECHSTORE"},
+        {"nif": "505416654", "name": "Nordic Móveis e Decoração Lda", "short": "NORDIC MOVEIS"},
+        {"nif": "502544180", "name": "TelecomPT - Comunicações S A", "short": "TELECOMPT"},
+        {"nif": "508346835", "name": "StoragePlus - Self Solutions Lda", "short": "STORAGEPLUS"},
+        {"nif": "515225142", "name": "Digital Choice, Lda", "short": "DIGITAL CHOICE"},
+        {"nif": "503619086", "name": "BeautyCare Cosmética, Lda", "short": "BEAUTYCARE"},
+        {"nif": "514610247", "name": "Serviços Chave Unipessoal Lda", "short": "SERVICOS CHAVE"},
+        {"nif": "503629995", "name": "AutoParts Portugal - Peças Auto Sa", "short": "AUTOPARTS PORTUGAL"},
+        {"nif": "503311332", "name": "Lisboa Parking - Estacionamento E.M.", "short": "LISBOA PARKING"},
+        {"nif": "514948809", "name": "Contabilidade Silva & Costa Lda", "short": "CONTABILIDADE SILVA"},
+        {"nif": "510938507", "name": "Cleaning Services Unipessoal Lda", "short": "CLEANING SERVICES"},
+        {"nif": "517318555", "name": "Tech Solutions Unipessoal Lda", "short": "TECH SOLUTIONS"},
+        {"nif": "503226696", "name": "Fashion Kids - Distribuição S A", "short": "FASHION KIDS"},
+        {"nif": "518173097", "name": "Construções Rápidas Lda", "short": "CONSTRUCOES RAPIDAS"},
+        {"nif": "514458984", "name": "City Storage, Lda", "short": "CITY STORAGE"},
+        {"nif": "500521662", "name": "Auto Repair Centro Lda", "short": "AUTO REPAIR"},
+        {"nif": "509584489", "name": "Fleet Management Lda", "short": "FLEET MANAGEMENT"},
+        {"nif": "502011475", "name": "Supermercado Central S A", "short": "SUPERMERCADO CENTRAL"},
+        {"nif": "516701258", "name": "Diagnostics Lab Lda", "short": "DIAGNOSTICS LAB"},
+        {"nif": "515696935", "name": "Office Solutions Lda", "short": "OFFICE SOLUTIONS"},
+        {"nif": "503020532", "name": "Adega Premium, S.A.", "short": "ADEGA PREMIUM"}
     ]
     
     # Additional names for non-matching movements (like personal transfers)
@@ -977,6 +1184,9 @@ async def generate_dummy_bank():
     balance = 50000.00  # Starting balance
     movements = []
     
+    # Keep track of which companies we've used for each amount
+    amount_to_company = {}
+    
     # First, create 200 matching movements
     for i in range(200):
         random_days = random.randint(0, 120)
@@ -984,19 +1194,35 @@ async def generate_dummy_bank():
         movement_date = start_date + timedelta(days=random_days + date_offset)
         
         amount = -shared_amounts[i]  # Negative for payments
-        company = random.choice(matching_companies)
         
-        # Create realistic payment descriptions
-        desc_types = [
-            f"TRF P/ {company}",
-            f"DD {company}",
-            f"ORDEM PERMANENTE {company}",
-            f"{company.upper()} LISBOA PRT",
-            f"PAGAMENTO {company}",
-            f"TRF. P/O {company} FT"
+        # For consistent matching, use the same company index as in E-fatura
+        company_index = i % len(efatura_companies)
+        company = efatura_companies[company_index]
+        
+        # Store which company we used for this amount (for matching)
+        amount_to_company[shared_amounts[i]] = company
+        
+        # Create realistic payment descriptions using variations of company names
+        desc_variations = [
+            # Use short name variations
+            f"TRF P/ {company['short']}",
+            f"DD {company['short']}",
+            f"TRANSF {company['short']}",
+            # Use partial company name
+            f"TRF {company['name'].split()[0].upper()}",
+            f"PAGAMENTO {company['name'].split()[0].upper()}",
+            # Use full name variations
+            f"{company['name'].upper()}",
+            f"ORDEM PERMANENTE {company['name'].split(',')[0].upper()}",
+            # Bank-specific formats
+            f"{company['short']} LISBOA PRT",
+            f"TRF. P/O {company['short']} FT",
+            # Abbreviated versions
+            f"DD {company['name'][:20].upper()}",
         ]
         
-        description = random.choice(desc_types)
+        # Choose a random variation
+        description = random.choice(desc_variations)
         
         movements.append({
             'date': movement_date,
@@ -1129,6 +1355,7 @@ async def get_bank_reconciliation(limit: int = 100, offset: int = 0):
             m.status as match_status,
             e.id as efatura_id,
             e.document_number,
+            e.document_type,
             e.document_date,
             e.supplier_name,
             e.supplier_nif,

@@ -680,3 +680,50 @@
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border-radius: 2px;
 }
+
+/* Document type pill styles */
+.document-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+
+.document-number {
+  font-weight: 500;
+  color: #1f2937;
+}
+
+.document-type-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: capitalize;
+  white-space: nowrap;
+  /* Default style */
+  background-color: #f3f4f6;
+  color: #6b7280;
+}
+
+/* Different colors for different document types */
+.document-type-pill[data-type="fatura"] {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+.document-type-pill[data-type="nota-de-credito"] {
+  background-color: #fce7f3;
+  color: #be185d;
+}
+
+.document-type-pill[data-type="fatura-recibo"] {
+  background-color: #ede9fe;
+  color: #7c3aed;
+}
+
+.document-type-pill[data-type="fatura-simplificada"] {
+  background-color: #d1fae5;
+  color: #047857;
+}

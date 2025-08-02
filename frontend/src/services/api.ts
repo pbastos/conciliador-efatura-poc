@@ -3,6 +3,7 @@ const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 export interface EfaturaRecord {
   efatura_id: string;
   document_number: string;
+  document_type?: string;
   document_date: string;
   supplier_name: string;
   supplier_nif: string;
