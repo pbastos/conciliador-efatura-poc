@@ -142,7 +142,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     <div className="dashboard-container">
       <h1 className="dashboard-title">Conciliador E-fatura</h1>
       <p className="dashboard-subtitle">
-        Reconciliação automática entre faturas eletrónicas e movimentos bancários
+        Reconciliação automática entre faturas eletrónicas e registos financeiros
       </p>
 
       <div className="stats-row">
@@ -175,7 +175,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
             </svg>
           </div>
           <div className="stat-value">{stats.total_bank}</div>
-          <div className="stat-label">Movimentos Bancários</div>
+          <div className="stat-label">Registos Financeiros</div>
         </div>
 
         <div className="stat-card">
@@ -246,13 +246,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
               className={`tab-button ${activeView === 'efatura' ? 'active' : ''}`}
               onClick={() => handleViewChange('efatura')}
             >
-              E-fatura → Banco
+              E-fatura → Financeiro
             </button>
             <button 
               className={`tab-button ${activeView === 'bank' ? 'active' : ''}`}
               onClick={() => handleViewChange('bank')}
             >
-              Banco → E-fatura
+              Financeiro → E-fatura
             </button>
           </div>
           
@@ -262,7 +262,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                 <thead>
                   <tr>
                     <th colSpan={5} className="section-divider">E-fatura</th>
-                    <th colSpan={4} className="section-divider">Movimento Bancário</th>
+                    <th colSpan={4} className="section-divider">Registo Financeiro</th>
                     <th className="section-divider">Estado</th>
                   </tr>
                   <tr>
@@ -320,7 +320,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
               <table className="reconciliation-table">
                 <thead>
                   <tr>
-                    <th colSpan={4} className="section-divider">Movimento Bancário</th>
+                    <th colSpan={4} className="section-divider">Registo Financeiro</th>
                     <th colSpan={5} className="section-divider">E-fatura</th>
                     <th className="section-divider">Estado</th>
                   </tr>

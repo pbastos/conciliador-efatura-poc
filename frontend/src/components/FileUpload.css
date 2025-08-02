@@ -66,6 +66,13 @@
   color: #1a1a1a;
 }
 
+.upload-subtitle {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 0.25rem 0 0 0;
+  font-weight: normal;
+}
+
 .upload-area {
   padding: 56px 32px;
   text-align: center;

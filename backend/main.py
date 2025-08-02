@@ -953,6 +953,102 @@ async def delete_all_data():
 async def health_check():
     return {"status": "healthy", "database": "SQLite"}
 
+# Helper function to get test companies with realistic bank name variations
+def get_test_companies():
+    """Returns a list of test companies with realistic bank name variations"""
+    return [
+        {"nif": "500649839", "name": "Lavandaria a Malita Soeiro e Neves Lda", "sector": "Outros", 
+         "bank_names": ["Lavandaria A Malita", "LAVANDARIA MALITA", "Lavandaria a M"]},
+        {"nif": "513700641", "name": "Mafalda Sofia Santana Unipessoal Lda", "sector": "Outros",
+         "bank_names": ["Sophiprojects Lda", "MAFALDA SANTANA", "M Sofia Santana"]},
+        {"nif": "506433269", "name": "Inside Tours, Lda", "sector": "",
+         "bank_names": ["Inside Tours", "INSIDE TOURS LDA", "Inside T"]},
+        {"nif": "514090634", "name": "ITVault Lda", "sector": "Outros",
+         "bank_names": ["ITVault", "ITVAULT LDA", "ITVault Lda"]},
+        {"nif": "503630330", "name": "Worten - Equipamentos Para o Lar S A", "sector": "",
+         "bank_names": ["WORTEN", "Worten Equipamentos", "WORTEN SA"]},
+        {"nif": "505416654", "name": "Ikea Portugal Móveis e Decoração Lda", "sector": "",
+         "bank_names": ["IKEA PORTUGAL", "Ikea", "IKEA MOVEIS"]},
+        {"nif": "502544180", "name": "Vodafone Portugal - Comunicações Pessoais S A", "sector": "Outros",
+         "bank_names": ["VODAFONE", "Vodafone Portugal", "VODAFONE PT"]},
+        {"nif": "508346835", "name": "Espazo Plus - Self Solutions Lda", "sector": "",
+         "bank_names": ["ESPAZO PLUS SE", "ESPAZO PLUS -", "Espazo Plus"]},
+        {"nif": "515225142", "name": "Arcade Choice, Lda", "sector": "Outros",
+         "bank_names": ["Arcade Choice", "ARCADE CHOICE", "Arcade Ch"]},
+        {"nif": "503619086", "name": "Lousani Cosmética, Lda", "sector": "Outros",
+         "bank_names": ["Lousani", "LOUSANI COSMETICA", "Lousani Cosm"]},
+        {"nif": "514610247", "name": "Serviços Chave Unipessoal Lda", "sector": "Outros",
+         "bank_names": ["Servicos Chave", "SERVICOS CHAVE", "Serv Chave"]},
+        {"nif": "503629995", "name": "AutoParts Portugal - Peças Auto Sa", "sector": "",
+         "bank_names": ["AUTOPARTS", "AutoParts Portugal", "AutoParts PT"]},
+        {"nif": "503311332", "name": "Lisboa Parking - Estacionamento E.M.", "sector": "Outros",
+         "bank_names": ["LISBOA PARKING", "Lisboa Park", "LX Parking"]},
+        {"nif": "514948809", "name": "C Santos SA", "sector": "",
+         "bank_names": ["C SANTOS SA", "C Santos", "CSANTOS"]},
+        {"nif": "510938507", "name": "FFH Self Storage", "sector": "Outros",
+         "bank_names": ["FFH Self Stora", "FFH SELF STORAGE", "FFH Storage"]},
+        {"nif": "517318555", "name": "Divicode Lda", "sector": "",
+         "bank_names": ["DIVICODE LDA", "Divicode", "DIVICODE"]},
+        {"nif": "503226696", "name": "Mobile World SA", "sector": "",
+         "bank_names": ["MOBILE WORLD SA", "Mobile World", "MOBILE W"]},
+        {"nif": "518173097", "name": "Chaves Areeiro", "sector": "Outros",
+         "bank_names": ["CHAVES AREEIRO", "Chaves Areeiro 1", "Ch Areeiro"]},
+        {"nif": "514458984", "name": "AccoPrime Consultores", "sector": "",
+         "bank_names": ["Accoprime", "ACCOPRIME", "AccoPrime"]},
+        {"nif": "500521662", "name": "Auto Repair Centro Lda", "sector": "Manutenção e reparação de veículos automóveis",
+         "bank_names": ["Auto Repair", "AUTO REPAIR CENTRO", "Auto Rep"]},
+        {"nif": "509584489", "name": "Fleet Management Lda", "sector": "Outros",
+         "bank_names": ["Fleet Management", "FLEET MGMT", "Fleet Mgmt"]},
+        {"nif": "502011475", "name": "Supermercado Central S A", "sector": "",
+         "bank_names": ["SUPERMERCADO CENTRAL", "Super Central", "Sup Central"]},
+        {"nif": "516701258", "name": "Diagnostics Lab Lda", "sector": "Outros",
+         "bank_names": ["Diagnostics Lab", "DIAGNOSTICS", "Diag Lab"]},
+        {"nif": "515696935", "name": "Office Solutions Lda", "sector": "",
+         "bank_names": ["Office Solutions", "OFFICE SOL", "Office Sol"]},
+        {"nif": "503020532", "name": "Adega Premium, S.A.", "sector": "",
+         "bank_names": ["Adega Premium", "ADEGA PREMIUM", "Adega Prem"]},
+        {"nif": "501234567", "name": "TechSolutions Portugal Lda", "sector": "Tecnologia",
+         "bank_names": ["TechSolutions", "TECHSOLUTIONS", "Tech Sol"]},
+        {"nif": "507890123", "name": "Green Energy Services SA", "sector": "Energia",
+         "bank_names": ["Green Energy", "GREEN ENERGY SVC", "Green En"]},
+        {"nif": "509876543", "name": "Porto Digital Marketing Lda", "sector": "Marketing",
+         "bank_names": ["Porto Digital", "PORTO DIGITAL MKT", "Porto Dig"]},
+        {"nif": "512345678", "name": "Café Central Lisboa Lda", "sector": "Restauração",
+         "bank_names": ["Cafe Central", "CAFE CENTRAL LX", "Cafe C"]},
+        {"nif": "505123456", "name": "AutoService Norte SA", "sector": "Automóvel",
+         "bank_names": ["AutoService", "AUTOSERVICE NORTE", "Auto Serv"]},
+        {"nif": "508765432", "name": "CleanMax - Serviços de Limpeza Lda", "sector": "Serviços",
+         "bank_names": ["CleanMax", "CLEANMAX SERVICOS", "Clean Max"]},
+        {"nif": "514567890", "name": "DataCenter Solutions Lda", "sector": "Tecnologia",
+         "bank_names": ["DataCenter Sol", "DATACENTER", "Data Center"]},
+        {"nif": "511234567", "name": "Fitness Club Porto SA", "sector": "Desporto",
+         "bank_names": ["Fitness Club", "FITNESS CLUB PRT", "Fit Club"]},
+        {"nif": "516789012", "name": "Smart Home Technologies Lda", "sector": "Tecnologia",
+         "bank_names": ["Smart Home", "SMART HOME TECH", "Smart H"]},
+        {"nif": "513456789", "name": "Bio Market Portugal SA", "sector": "Retalho",
+         "bank_names": ["Bio Market", "BIO MARKET PT", "Bio Mkt"]},
+        {"nif": "517890123", "name": "Digital Print Express Lda", "sector": "Impressão",
+         "bank_names": ["Digital Print", "DIGITAL PRINT EXP", "Dig Print"]},
+        {"nif": "510123456", "name": "Security Systems Pro SA", "sector": "Segurança",
+         "bank_names": ["Security Sys", "SECURITY SYSTEMS", "Sec Systems"]},
+        {"nif": "515678901", "name": "Cloud Services Portugal Lda", "sector": "Tecnologia",
+         "bank_names": ["Cloud Services", "CLOUD SERVICES PT", "Cloud Serv"]},
+        {"nif": "512890123", "name": "Fast Delivery Express SA", "sector": "Logística",
+         "bank_names": ["Fast Delivery", "FAST DELIVERY", "Fast Del"]},
+        {"nif": "518345678", "name": "Medical Center Lisboa Lda", "sector": "Saúde",
+         "bank_names": ["Medical Center", "MEDICAL CENTER LX", "Med Center"]},
+        {"nif": "509012345", "name": "Pet Care Services Lda", "sector": "Animais",
+         "bank_names": ["Pet Care", "PET CARE SERVICES", "Pet C"]},
+        {"nif": "514789012", "name": "Construction Pro SA", "sector": "Construção",
+         "bank_names": ["Construction Pro", "CONSTRUCTION PRO", "Const Pro"]},
+        {"nif": "511567890", "name": "Travel Agency Porto Lda", "sector": "Turismo",
+         "bank_names": ["Travel Agency", "TRAVEL AGENCY PRT", "Travel A"]},
+        {"nif": "516234567", "name": "Solar Panel Installers SA", "sector": "Energia",
+         "bank_names": ["Solar Panel", "SOLAR PANEL INST", "Solar P"]},
+        {"nif": "513890123", "name": "Bakery Fresh Daily Lda", "sector": "Alimentação",
+         "bank_names": ["Bakery Fresh", "BAKERY FRESH", "Bakery F"]}
+    ]
+
 # Generate dummy E-fatura file
 @app.get("/api/v1/test-data/generate-efatura")
 async def generate_dummy_efatura():
@@ -961,34 +1057,8 @@ async def generate_dummy_efatura():
     import random
     from datetime import datetime, timedelta
     
-    # Realistic Portuguese company data (anonymized versions)
-    companies = [
-        {"nif": "500649839", "name": "Lavandaria Lisboa Clean Lda", "sector": "Outros"},
-        {"nif": "513700641", "name": "Maria Santos Design Unipessoal Lda", "sector": "Outros"},
-        {"nif": "506433269", "name": "Portugal Tours, Lda", "sector": ""},
-        {"nif": "514090634", "name": "TechVault Lda", "sector": "Outros"},
-        {"nif": "503630330", "name": "TechStore - Equipamentos S A", "sector": ""},
-        {"nif": "505416654", "name": "Nordic Móveis e Decoração Lda", "sector": ""},
-        {"nif": "502544180", "name": "TelecomPT - Comunicações S A", "sector": "Outros"},
-        {"nif": "508346835", "name": "StoragePlus - Self Solutions Lda", "sector": ""},
-        {"nif": "515225142", "name": "Digital Choice, Lda", "sector": "Outros"},
-        {"nif": "503619086", "name": "BeautyCare Cosmética, Lda", "sector": "Outros"},
-        {"nif": "514610247", "name": "Serviços Chave Unipessoal Lda", "sector": "Outros"},
-        {"nif": "503629995", "name": "AutoParts Portugal - Peças Auto Sa", "sector": ""},
-        {"nif": "503311332", "name": "Lisboa Parking - Estacionamento E.M.", "sector": "Outros"},
-        {"nif": "514948809", "name": "Contabilidade Silva & Costa Lda", "sector": ""},
-        {"nif": "510938507", "name": "Cleaning Services Unipessoal Lda", "sector": "Outros"},
-        {"nif": "517318555", "name": "Tech Solutions Unipessoal Lda", "sector": ""},
-        {"nif": "503226696", "name": "Fashion Kids - Distribuição S A", "sector": ""},
-        {"nif": "518173097", "name": "Construções Rápidas Lda", "sector": "Outros"},
-        {"nif": "514458984", "name": "City Storage, Lda", "sector": ""},
-        {"nif": "500521662", "name": "Auto Repair Centro Lda", "sector": "Manutenção e reparação de veículos automóveis"},
-        {"nif": "509584489", "name": "Fleet Management Lda", "sector": "Outros"},
-        {"nif": "502011475", "name": "Supermercado Central S A", "sector": ""},
-        {"nif": "516701258", "name": "Diagnostics Lab Lda", "sector": "Outros"},
-        {"nif": "515696935", "name": "Office Solutions Lda", "sector": ""},
-        {"nif": "503020532", "name": "Adega Premium, S.A.", "sector": ""}
-    ]
+    # Get test companies with realistic bank name variations
+    companies = get_test_companies()
     
     # Shared amounts that will match with bank movements
     shared_amounts = [
@@ -1094,34 +1164,8 @@ async def generate_dummy_bank():
     if not amount_column:
         amount_column = 'Montante'
     
-    # Same companies from E-fatura for successful matches
-    efatura_companies = [
-        {"nif": "500649839", "name": "Lavandaria Lisboa Clean Lda", "short": "LAVANDARIA LISBOA"},
-        {"nif": "513700641", "name": "Maria Santos Design Unipessoal Lda", "short": "MARIA SANTOS DESIGN"},
-        {"nif": "506433269", "name": "Portugal Tours, Lda", "short": "PORTUGAL TOURS"},
-        {"nif": "514090634", "name": "TechVault Lda", "short": "TECHVAULT"},
-        {"nif": "503630330", "name": "TechStore - Equipamentos S A", "short": "TECHSTORE"},
-        {"nif": "505416654", "name": "Nordic Móveis e Decoração Lda", "short": "NORDIC MOVEIS"},
-        {"nif": "502544180", "name": "TelecomPT - Comunicações S A", "short": "TELECOMPT"},
-        {"nif": "508346835", "name": "StoragePlus - Self Solutions Lda", "short": "STORAGEPLUS"},
-        {"nif": "515225142", "name": "Digital Choice, Lda", "short": "DIGITAL CHOICE"},
-        {"nif": "503619086", "name": "BeautyCare Cosmética, Lda", "short": "BEAUTYCARE"},
-        {"nif": "514610247", "name": "Serviços Chave Unipessoal Lda", "short": "SERVICOS CHAVE"},
-        {"nif": "503629995", "name": "AutoParts Portugal - Peças Auto Sa", "short": "AUTOPARTS PORTUGAL"},
-        {"nif": "503311332", "name": "Lisboa Parking - Estacionamento E.M.", "short": "LISBOA PARKING"},
-        {"nif": "514948809", "name": "Contabilidade Silva & Costa Lda", "short": "CONTABILIDADE SILVA"},
-        {"nif": "510938507", "name": "Cleaning Services Unipessoal Lda", "short": "CLEANING SERVICES"},
-        {"nif": "517318555", "name": "Tech Solutions Unipessoal Lda", "short": "TECH SOLUTIONS"},
-        {"nif": "503226696", "name": "Fashion Kids - Distribuição S A", "short": "FASHION KIDS"},
-        {"nif": "518173097", "name": "Construções Rápidas Lda", "short": "CONSTRUCOES RAPIDAS"},
-        {"nif": "514458984", "name": "City Storage, Lda", "short": "CITY STORAGE"},
-        {"nif": "500521662", "name": "Auto Repair Centro Lda", "short": "AUTO REPAIR"},
-        {"nif": "509584489", "name": "Fleet Management Lda", "short": "FLEET MANAGEMENT"},
-        {"nif": "502011475", "name": "Supermercado Central S A", "short": "SUPERMERCADO CENTRAL"},
-        {"nif": "516701258", "name": "Diagnostics Lab Lda", "short": "DIAGNOSTICS LAB"},
-        {"nif": "515696935", "name": "Office Solutions Lda", "short": "OFFICE SOLUTIONS"},
-        {"nif": "503020532", "name": "Adega Premium, S.A.", "short": "ADEGA PREMIUM"}
-    ]
+    # Use the same companies as E-fatura to ensure consistent matching
+    companies = get_test_companies()
     
     # Additional names for non-matching movements (like personal transfers)
     person_names = [
@@ -1196,29 +1240,27 @@ async def generate_dummy_bank():
         amount = -shared_amounts[i]  # Negative for payments
         
         # For consistent matching, use the same company index as in E-fatura
-        company_index = i % len(efatura_companies)
-        company = efatura_companies[company_index]
+        company_index = i % len(companies)
+        company = companies[company_index]
         
         # Store which company we used for this amount (for matching)
         amount_to_company[shared_amounts[i]] = company
         
-        # Create realistic payment descriptions using variations of company names
+        # Use bank_names for realistic bank descriptions
+        bank_name = random.choice(company['bank_names'])
+        
+        # Create realistic payment descriptions using bank_names
         desc_variations = [
-            # Use short name variations
-            f"TRF P/ {company['short']}",
-            f"DD {company['short']}",
-            f"TRANSF {company['short']}",
-            # Use partial company name
-            f"TRF {company['name'].split()[0].upper()}",
-            f"PAGAMENTO {company['name'].split()[0].upper()}",
-            # Use full name variations
-            f"{company['name'].upper()}",
-            f"ORDEM PERMANENTE {company['name'].split(',')[0].upper()}",
-            # Bank-specific formats
-            f"{company['short']} LISBOA PRT",
-            f"TRF. P/O {company['short']} FT",
-            # Abbreviated versions
-            f"DD {company['name'][:20].upper()}",
+            f"TRF P/ {bank_name}",
+            f"DD {bank_name}",
+            f"TRANSF {bank_name}",
+            f"TRF {bank_name}",
+            f"PAGAMENTO {bank_name}",
+            f"{bank_name}",
+            f"ORDEM PERMANENTE {bank_name}",
+            f"{bank_name} LISBOA PRT",
+            f"TRF. P/O {bank_name} FT",
+            f"DD {bank_name}"
         ]
         
         # Choose a random variation

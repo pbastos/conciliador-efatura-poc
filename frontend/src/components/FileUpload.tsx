@@ -245,7 +245,8 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadSuccess, onNavigate }) 
                 <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
               </svg>
             </div>
-            <h3>Movimentos Bancários</h3>
+            <h3>Registos Financeiros</h3>
+            <p className="upload-subtitle">Movimentos Bancários, Faturas, Pagamentos, etc.</p>
           </div>
           
           <div
@@ -288,10 +289,10 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadSuccess, onNavigate }) 
                 <p className="upload-text">
                   {isBankDragActive
                     ? 'Solte o ficheiro aqui...'
-                    : 'Arraste o ficheiro bancário aqui'}
+                    : 'Arraste o ficheiro financeiro aqui'}
                 </p>
-                <p className="upload-formats">XLSX, CSV ou OFX</p>
-                <p className="upload-hint">Clique ou arraste para carregar</p>
+                <p className="upload-formats">Excel com data, descrição e valor</p>
+                <p className="upload-hint">Compatible com extratos bancários, pagamentos, faturas liquidadas, etc.</p>
               </>
             )}
           </div>
@@ -317,7 +318,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadSuccess, onNavigate }) 
         </div>
         <ul>
           <li>Carregue o ficheiro exportado do portal E-fatura</li>
-          <li>Carregue o extrato bancário em formato Excel</li>
+          <li>Carregue registos financeiros em formato Excel (extratos bancários, faturas pagas, etc.)</li>
           <li>O sistema irá automaticamente fazer a correspondência entre os registos</li>
         </ul>
       </div>
